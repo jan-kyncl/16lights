@@ -31,6 +31,25 @@ but treat it as an enthusiast project, not as polished software. Issues and pull
 | **Ingest**       | camera content over USB (PTP via libusb): thumbnails, in-library / backed-up badges, import with backup                                                            |
 | **Know-how**     | in-app technical documentation of all algorithms, the hardware, the workflow and the roadmap (`#/knowhow`)                                                         |
 
+## Screenshots
+
+**Editor**: the fused image from 4 colour modules, live tone edits in WebGL2, refocus with an
+f-number slider, straighten with an Apple Vision horizon proposal.
+
+![Editor](docs/screenshots/editor.jpg)
+
+**Depth map** overlay (warm = near, cold = far): plane sweep over the A modules refined with Depth Pro.
+
+![Depth map](docs/screenshots/depth.jpg)
+
+| Library                                  | Camera modules of one shot               |
+| ---------------------------------------- | ---------------------------------------- |
+| ![Library](docs/screenshots/library.jpg) | ![Modules](docs/screenshots/modules.jpg) |
+
+**Know-how**: the in-app technical documentation.
+
+![Know-how](docs/screenshots/knowhow.jpg)
+
 ## Architecture
 
 ```
