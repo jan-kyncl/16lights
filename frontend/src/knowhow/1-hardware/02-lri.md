@@ -41,12 +41,22 @@ Raw pixel data sits in the same blocks. Each module record points to its data su
 
 - **`PACKED_10BPP`**: 10-bit packed Bayer, the normal case. Decoding is bit-exact (tested).
   The decoder reports a white level of 981; values are normalised by it.
-- **`BAYER_JPEG`**: older firmware stored 8-bit JPEG-compressed Bayer data. It is decoded and
-  scaled to 10 bits, and the shot gets the `bayer_jpeg` warning. Whether it is linear or gamma
-  encoded is still unverified.
-- **Stacked captures**: in low light the camera stores **several frames per module** in one LRI
-  (documented by [lux](https://github.com/mprovenz/lux)). mizukage keeps only the first frame per
-  module, so our pipeline currently ignores the rest. See _Roadmap & TODO_.
+- **`BAYER_JPEG`**: older firmware (all our night shots from 2024) stores the Bayer data as JPEG.
+  Block layout: `"BJPG"`, u32 format (0 = four half-size planes, 1 = one plane for the mono module),
+  4 × u32 JPEG lengths, a `"QDQT"` section with the encoder's **compand table** (10-bit → 8-bit,
+  1024 bytes at offset 40) and the **dequantisation table** (256 × u16 at offset 1064, 8-bit →
+  10-bit), then the JPEG streams from offset 1576. The four planes are in **raster order** of the
+  2 × 2 tile (plane p → row p>>1, column p&1), independent of the CFA pattern.
+  **mizukage 0.1.0 gets both wrong** (assumes R, G, G, B order and multiplies by 4 instead of using
+  the table), which made night shots magenta. Our decoder `l16core/bjpg.py` replaces its
+  `decode_bjpg`. Verified against lux: CFA site means 67.90 / 59.60 / 54.14 / 67.82 vs 67.97 / 59.61
+  / 54.14 / 67.86 on L16_00248 A1.
+- **Stacked captures**: in low light the camera stores **4 frames per module** (same exposure, gain
+  and lens position). The backup has 32 such shots, all BAYER_JPEG. `bjpg.merge` aligns frames 2–4
+  to frame 1 with DIS optical flow on the half-size luma, warps each CFA plane, and averages with
+  weights from the agreement with the reference (ghost / motion rejection). Typical weights 0.92,
+  0.4 s per module. With the fix, fusion uses 89–99 % of the module pixels on night shots instead of
+  1–3 %.
 
 ## Decoding library
 

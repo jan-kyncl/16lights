@@ -91,7 +91,12 @@ def test_upload_process_edit_export(synth_lri: Path, data_dir: Path) -> None:
 
     tif = tifffile.imread(io.BytesIO(r.content))
     assert tif.dtype == np.uint16 and tif.shape[2] == 3
-    assert client.post(f"/api/shots/{shot_id}/export", json={"format": "dng"}).status_code == 501
+    r = client.post(f"/api/shots/{shot_id}/export", json={"format": "dng", "edits": {}})
+    assert r.status_code == 200 and r.content[:4] == b"II*\x00"
+    with tifffile.TiffFile(io.BytesIO(r.content)) as dng:
+        page = dng.pages[0]
+        assert page.photometric == 34892 and page.dtype == np.uint16  # LinearRaw
+        assert 50706 in page.tags  # DNGVersion
 
     # opakovaný upload stejného souboru nic nepřepočítává
     with synth_lri.open("rb") as fh:

@@ -1,6 +1,29 @@
 # Roadmap & TODO
 
-Updated 2026-10-22 (late evening).
+Updated 2026-10-22 (night).
+
+## Plan: better than lux / Lumen (from the comparison of 2026-10-22)
+
+lux reproduces Lumen byte for byte, so it is the Lumen reference. On 6 shots, lux has 20–43 % less
+noise at 52 MP and cleaner colour; we have sharper edges (+14…+59 %), a much cleaner depth map and
+are 3× faster. Ordered by impact:
+
+1. [ ] **Joint merge of all observations**: 4 stack frames × 4 colour modules = 16 observations at
+       night, merged at once per tile (frequency-domain Wiener, HDR+ style) with a noise model from the
+       gain. lux merges per module, then across modules
+2. [ ] **Chroma + luma denoise** after fusion, guided by luma and the noise model (chroma noise in
+       shadows is the most visible gap)
+3. [ ] **Exposure from metadata** (Lumen adds the LRI ev offset, +3.2 EV at night) + local tone
+       mapping using the fusion's HDR range
+4. [ ] **52 MP without artefacts, full frame**: reject misaligned B tiles (colour threads on
+       backlit edges), B poses from `mirror_position`, sub-pixel super-resolution from the A modules
+       where no B module reaches. Target 52–75 MP
+5. [ ] **Colour**: ForwardMatrix refit on a ColorChecker + HueSatMap (DCP) in the DNG
+6. [ ] **70 / 150 mm modes** (19 shots in the backup): B4 reference, C modules as detail
+7. [ ] **Depth as an output**: full resolution, GDepth and HEIC depth export (refocus in iPhone
+       Photos), interactive parallax / 3D view in the browser
+8. [ ] **Learned L16 denoiser** (DGX Spark): Noise2Noise on aligned module and stack pairs
+9. [ ] **Automated benchmark** against lux on a fixed shot set after every change
 
 ## Milestones
 
@@ -75,7 +98,7 @@ Updated 2026-10-22 (late evening).
 
 ## Decoding & colour
 
-- [ ] **Stacked captures**: low-light LRIs carry several frames per module (seen in lux). mizukage keeps only the first ("first occurrence wins"), so the rest is dropped. Detect them (warning), then align and merge per module before development (cf. lux `StackFusion`). Needs a low-light test shot
+- [x] **Stacked captures** + **BAYER_JPEG decoding** fixed (`l16core/bjpg.py`): raster plane order, dequantisation table, 4-frame merge per module
 - [ ] Colour accuracy: refit the `ForwardMatrix` against a Macbeth / ColorChecker reference instead of trusting the proto values (as lux does). Needs a ColorChecker shot
 - [ ] Depth step 2 design note: lux uses SGM on the half-res green plane + guided upsampling. This agrees with our plan. Keep bundle adjustment in reserve if rotation-only refinement stops being enough
 
@@ -107,7 +130,7 @@ Updated 2026-10-22 (late evening).
 - [ ] B/C modules: sensor `flip_h` / `flip_v` flags are not applied yet
 - [ ] Distortion model direction only weakly confirmed (matches cluster in the centre). Verify with
       corner features or straight lines
-- [ ] `BAYER_JPEG`: linear or gamma encoded?
+- [x] `BAYER_JPEG`: companded (sqrt-like), dequantisation table in the block header
 - [ ] Preview (19 MB) and full frame (78 MB) are sent uncompressed. Consider compression for remote use
 - [ ] Temperature/tint are relative multipliers, not Kelvin. The CCM is not interpolated with WB
 - [ ] Pre-existing mypy error in `app/jobs.py:71`

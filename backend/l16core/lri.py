@@ -9,7 +9,9 @@ from typing import Any
 import mizukage
 from mizukage import CameraId, LriFile, RawFormat, RawImage
 
-from l16core import lelr
+from l16core import bjpg, lelr
+
+bjpg.install()  # opravené dekódování BAYER_JPEG + slučování stacku (mizukage 0.1.0 má chybu)
 
 # Které moduly se spouštějí v jednotlivých režimech (ekv. ohnisko v mm).
 MODE_ARRAYS: dict[int, frozenset[str]] = {
