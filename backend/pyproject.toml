@@ -1,6 +1,7 @@
 [project]
 name = "l16-web-lab"
 version = "0.1.0"
+license = "MIT"
 description = "Self-hosted webová náhrada Lumenu pro Light L16"
 requires-python = ">=3.12"
 dependencies = [

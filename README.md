@@ -126,3 +126,14 @@ in the app under Know-how → Project → Prior art.
 - **HDR+** (Hasinoff et al., 2016): the inspiration for the planned tile-based robust merge.
 - Apple **Vision** framework (person segmentation, faces, horizon), **PyTorch** (MPS), **OpenCV**,
   **tifffile**, **FastAPI**, **Vite**.
+
+## License
+
+[MIT](LICENSE) for the code in this repository.
+
+Third-party components keep their own terms. In particular, the **Apple Depth Pro** weights
+(downloaded on first use, not part of this repository) are under the
+[Apple ML Research Model licence](https://huggingface.co/apple/DepthPro-hf), which allows research use
+only. For commercial use, disable the refinement (`"mono": false` in the native `/depth` call) or swap
+in a model with a suitable licence. `mizukage` has no stated licence and is only installed as a
+dependency, never vendored.

@@ -1,6 +1,7 @@
 [project]
 name = "l16-native"
 version = "0.1.0"
+license = "MIT"
 description = "L16 Web Lab: nativní služba na hostu (GPU přes PyTorch MPS, Apple Vision)"
 requires-python = ">=3.12,<3.14"
 dependencies = [
