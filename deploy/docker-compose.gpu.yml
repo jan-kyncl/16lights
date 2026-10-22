@@ -1,0 +1,14 @@
+# NVIDIA GPU pro worker (jen Linux s nvidia-container-toolkit):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Na macOS (Colima/Docker Desktop) GPU do kontejneru neprojde, worker běží na CPU.
+services:
+  worker:
+    environment:
+      L16_DEVICE: cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

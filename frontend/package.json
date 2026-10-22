@@ -1,0 +1,21 @@
+{
+  "name": "l16-web-lab-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write src index.html",
+    "format:check": "prettier --check src index.html"
+  },
+  "devDependencies": {
+    "prettier": "3.3.3",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
+  },
+  "dependencies": {
+    "marked": "14.1.3"
+  }
+}

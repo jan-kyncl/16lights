@@ -1,0 +1,20 @@
+# data, snímky, modely, zálohy
+data/
+models/
+*.lri
+*.lris
+*.dng
+*.npy
+lightcal/
+tools/ingest/*.json
+
+# prostředí a cache
+**/.venv/
+**/__pycache__/
+**/.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
+frontend/node_modules/
+frontend/dist/
+deploy/.env
+.DS_Store

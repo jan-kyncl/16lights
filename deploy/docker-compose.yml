@@ -1,0 +1,42 @@
+name: l16
+
+x-backend: &backend
+  build:
+    context: ../backend
+  image: l16-backend:latest
+  restart: unless-stopped
+  environment:
+    L16_DATA_DIR: /data
+    L16_MODELS_DIR: /models
+    L16_MAX_UPLOAD_MB: ${L16_MAX_UPLOAD_MB:-1024}
+    # nativní služba na hostu (GPU, Apple Vision); prázdné = vše na CPU v kontejneru
+    L16_NATIVE_URL: ${L16_NATIVE_URL:-http://host.docker.internal:5310}
+  volumes:
+    - ${L16_DATA:-../data}:/data
+    - ${L16_MODELS:-../models}:/models:ro
+
+services:
+  api:
+    <<: *backend
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    <<: *backend
+    command: ["python", "-m", "app.worker"]
+
+  web:
+    build:
+      context: ../frontend
+      dockerfile: ../deploy/web.Dockerfile
+    image: l16-web:latest
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${L16_PORT:-5300}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro

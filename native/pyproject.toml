@@ -1,0 +1,32 @@
+[project]
+name = "l16-native"
+version = "0.1.0"
+description = "L16 Web Lab: nativní služba na hostu (GPU přes PyTorch MPS, Apple Vision)"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "l16-web-lab",
+    "torch>=2.5",
+    "pyobjc-framework-Vision>=10.3",
+    "pyobjc-framework-Quartz>=10.3",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "transformers>=4.48",
+    "torchvision>=0.29.1",
+    "pyusb>=1.3.1",
+]
+
+[tool.uv.sources]
+l16-web-lab = { path = "../backend", editable = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["l16native"]
+
+[tool.ruff]
+line-length = 100

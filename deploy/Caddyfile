@@ -1,0 +1,37 @@
+{
+	admin off
+}
+
+:80 {
+	# Velké .lri (až ~200 MB) a lightcal zipy.
+	request_body {
+		max_size 2GB
+	}
+
+	# Volitelná basic auth (hash: `docker run --rm caddy:2.8-alpine caddy hash-password`).
+	# basic_auth {
+	# 	{$L16_AUTH_USER} {$L16_AUTH_HASH}
+	# }
+
+	handle /api/* {
+		reverse_proxy api:8000 {
+			# SSE průběh úloh bez bufferování
+			flush_interval -1
+			transport http {
+				read_timeout 10m
+			}
+		}
+	}
+
+	handle {
+		root * /srv
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
