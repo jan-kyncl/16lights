@@ -9,6 +9,14 @@ nothing goes to the cloud.
 > Not affiliated with Light Labs. The L16 file format was reverse-engineered by the community; see
 > _Credits_.
 
+## About this project
+
+I own a Light L16 and wanted to keep using it after Lumen stopped being an option. This project was
+**vibe-coded**: I set the goals, tested on my own camera and shots, and decided what to keep, while
+the code, the algorithms and the documentation were written in conversation with an AI coding
+assistant ([Claude Code](https://claude.com/claude-code)). Every step was checked on real L16 shots,
+but treat it as an enthusiast project, not as polished software. Issues and pull requests are welcome.
+
 ## What it does
 
 | Stage            | How                                                                                                                                                                |
