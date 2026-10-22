@@ -9,7 +9,7 @@ therefore runs in a small native service on the host, which the worker calls ove
 | Runs as             | launchd agent `com.budhalabs.l16-native` → `native/start.sh` → uvicorn on **127.0.0.1:5310**                  |
 | Logs                | `/tmp/l16_native.log`, `/tmp/l16_native.err`                                                                  |
 | Reached from Docker | `http://host.docker.internal:5310` (`L16_NATIVE_URL` in `docker-compose.yml`)                                 |
-| Data                | shared disk: host `~/damocles_l16/data` = `/data` in the containers. Only IDs and summaries go over HTTP      |
+| Data                | shared disk: host `~/16lights/data` = `/data` in the containers. Only IDs and summaries go over HTTP      |
 | Fallback            | if `/health` fails, the worker runs everything on CPU in Docker (`depth.engine = "cpu"`)                      |
 
 ## Endpoints

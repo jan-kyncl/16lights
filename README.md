@@ -90,8 +90,39 @@ service after every backend change** (version check).
 
 ## Credits
 
-- [mizukage](https://pypi.org/project/mizukage/) (LRI decoding, demosaic, calibration loaders) is
-  used as a dependency only. It has no stated licence, so no code is copied from it.
-- Ideas, but no code, from [mprovenz/lux](https://github.com/mprovenz/lux) and
-  [isamarin/lri-drop](https://github.com/isamarin/lri-drop). See Know-how → Project → Prior art.
-- [Apple Depth Pro](https://huggingface.co/apple/DepthPro-hf), via Hugging Face transformers.
+This project stands on the work of the Light L16 community and on published research. Thank you!
+**No code is copied** from the projects below: most are GPL or unlicensed, so we used them as a
+dependency, as documentation of the file format and the camera, or as a source of ideas. Details are
+in the app under Know-how → Project → Prior art.
+
+### L16 community
+
+| Project                                                                                                         | What we owe it                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [mizukage](https://pypi.org/project/mizukage/)                                                                  | LRI decoding (LELR / protobuf, packed raw, debayer, calibration loaders), used **as a dependency**                                                   |
+| [ryaker/l16-pipeline](https://github.com/ryaker/l16-pipeline)                                                   | an early end-to-end L16 processing pipeline we studied when starting                                                                                 |
+| [mprovenz/lux](https://github.com/mprovenz/lux)                                                                 | ideas: SGM depth on the green plane, bundle-adjusted registration, stacked low-light captures per module, ForwardMatrix refit against a ColorChecker |
+| [isamarin/lri-drop](https://github.com/isamarin/lri-drop) and lri-rs                                            | getting `.lri` files off the camera (adb route), per-module DNG conversion                                                                           |
+| [PIXLS.us: Decoding Light L16 LRI raw files](https://discuss.pixls.us/t/decoding-light-l16-lri-raw-files/24219) | the community reverse-engineering of the LRI format                                                                                                  |
+| [l16-camera/openlight-camera](https://github.com/l16-camera/openlight-camera)                                   | the camera app, repackaged and kept alive                                                                                                            |
+| [artillect/l16-linux](https://github.com/artillect/l16-linux)                                                   | postmarketOS port that drives all 16 modules and writes LRI files                                                                                    |
+| [helloavo/Light-L16-Archive](https://github.com/helloavo/Light-L16-Archive)                                     | archive of the L16 software and firmware                                                                                                             |
+| [XDA: Light L16 firmware thread](https://xdaforums.com/t/light-l16-firmware.4403267/)                           | developer mode, adb and firmware notes                                                                                                               |
+| Light Labs                                                                                                      | the camera itself and Lumen, whose results we try to match                                                                                           |
+
+### Models and algorithms
+
+- **Apple Depth Pro**: Bochkovskii et al., _Depth Pro: Sharp Monocular Metric Depth in Less Than a
+  Second_ (2024), [apple/DepthPro-hf](https://huggingface.co/apple/DepthPro-hf) via Hugging Face
+  transformers. It refines the multi-view depth.
+- **Depth Anything V2** (Yang et al., 2024): evaluated as an alternative monocular prior.
+- **Plane-sweep stereo**: R. Collins, _A Space-Sweep Approach to True Multi-Image Matching_ (1996).
+- **Guided filter**: K. He, J. Sun, X. Tang, _Guided Image Filtering_ (2010/2013), for cost aggregation
+  and depth fill.
+- **DIS optical flow**: T. Kroeger et al., _Fast Optical Flow using Dense Inverse Search_ (2016), via
+  OpenCV, for fusion and detail alignment.
+- **Single-pass gather bokeh**: D. Gustafsson, _Bokeh depth of field in a single pass_ (blog post), for
+  the refocus.
+- **HDR+** (Hasinoff et al., 2016): the inspiration for the planned tile-based robust merge.
+- Apple **Vision** framework (person segmentation, faces, horizon), **PyTorch** (MPS), **OpenCV**,
+  **tifffile**, **FastAPI**, **Vite**.

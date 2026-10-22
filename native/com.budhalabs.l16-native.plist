@@ -7,10 +7,10 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/damocles/damocles_l16/native/start.sh</string>
+    <string>/Users/damocles/16lights/native/start.sh</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/damocles/damocles_l16/native</string>
+  <string>/Users/damocles/16lights/native</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
