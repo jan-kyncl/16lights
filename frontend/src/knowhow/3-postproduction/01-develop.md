@@ -10,7 +10,9 @@
    and comes from the lightcal or from the LRI header.
 4. **Demosaic** (GRBG):
    - preview: `HALF`, a 2 × 2 superpixel giving 2080 × 1560 (one RGB value per Bayer quad, no interpolation),
-   - full resolution: **Malvar–He–Cutler** (`colour-demosaicing`), with bilinear as fallback.
+   - full resolution: **Menon 2007 (DDFAPD)** (`colour-demosaicing`), 2.4 s per 13 MP module;
+     sharper and 3× faster than Malvar–He–Cutler. Bilinear only as a fallback. Until 2026-10-22 the
+     native service lacked the package, so the fusion silently used bilinear (visibly soft vs. Lumen).
 5. **Normalise** by the white level → 1.0 = sensor saturation.
 6. **Orient** for display (180° sensor mount + IMU), not for geometry work.
 

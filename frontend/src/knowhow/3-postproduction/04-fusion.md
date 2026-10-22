@@ -37,6 +37,43 @@ All in the reference's raw sensor orientation, full resolution, linear camera RG
      in its own clipped pixels too.
 6. Weighted mean, in the reference's scale. Mono A2 is not used yet.
 
+## Merge and denoise (`l16core/merge.py`, GPU `native/l16native/gpu_merge.py`, 2026-10-22)
+
+The warped modules are no longer averaged per pixel. The merge works like HDR+, extended with a
+measured noise model, and is followed by a wavelet denoiser:
+
+1. **Colour space** Y / U = R − Y / V = B − Y, so chroma can be denoised harder than luma.
+2. **Local gain matching**: each module is matched to A1 per channel with a slow gain field (σ 24 px).
+   Modules differ slightly in vignetting and red/blue response (Lumen applies per-module R/B factors
+   with A1 = 1 too). Without it, low-frequency module differences look like noise.
+3. **Tiles** 16 × 16 with 50 % overlap, √raised-cosine window for analysis and synthesis (WOLA),
+   FFT per tile.
+4. **Noise model from the data**: power spectrum of the differences reference − module, median over
+   the smoothest quarter of tiles per brightness band, linear fit `N(f, I) = a(f)·I + b(f)`. It
+   includes demosaic correlation and each module's real noise (stacks, gains).
+5. **Wiener merge** per frequency: `A = |D|² / (|D|² + 6·N·(1 + rel_var))`; a small difference is noise
+   and gets averaged, a large one (motion, occlusion, misalignment) keeps the reference. Weights
+   ∝ 1 / relative variance.
+6. **Spatial denoise**: undecimated à trous B3 wavelet (shift-invariant, so no tile grid). Per-level
+   noise is measured the same way from the module differences; James–Stein shrinkage on local energy.
+   Luma: 3 levels, k = 0.8, at least 30 % of the detail is kept (texture instead of a plastic look).
+   Chroma: 5 levels (removes coarse colour blotches), k = 3.
+
+Tried and dropped: spatial Wiener inside the tiles (8 px grid in flat areas), guided-filter chroma
+smoothing (local colour shifts).
+
+| Shot      | Noise 52 MP: lux → ours | Noise 13 MP: lux → ours | Edge sharpness 52 MP vs lux |
+| --------- | ----------------------- | ----------------------- | --------------------------- |
+| 00752     | 0.0085 → 0.0040         | 0.0074 → 0.0051         | +16 %                       |
+| 00754     | 0.0069 → 0.0036         | 0.0056 → 0.0042         | +24 %                       |
+| 00248 (n) | 0.0375 → 0.0250         | 0.0318 → 0.0152         | +50 %                       |
+| 00259 (n) | 0.0423 → 0.0202         | 0.0325 → 0.0096         | +42 %                       |
+
+Measured on DNGs decoded the same way (LibRaw), lux aligned by homography; see the comparison page.
+GPU merge: 2 s per shot (CPU reference 19 s), median relative difference 8e-6. Fusion stats:
+`fusion.method`, `fusion.merge` (noise model, `n_eff`), `per_module[*].accepted` (share of the
+module's spectrum that was merged).
+
 ## Quality metrics (changed 2026-10-22)
 
 The first metrics (high-pass energy of the whole image) **mixed noise with detail**: averaging looked

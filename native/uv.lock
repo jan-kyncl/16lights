@@ -52,6 +52,34 @@ wheels = [
 ]
 
 [[package]]
+name = "colour-demosaicing"
+version = "0.2.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colour-science" },
+    { name = "imageio" },
+    { name = "numpy" },
+    { name = "scipy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8b/d0/db1bab6de6010a1c28a83a36c812012f2c7c1097657c94906433bfdc58c8/colour_demosaicing-0.2.7.tar.gz", hash = "sha256:0d151f7bbd2cb6d57381fc8adbd05a0236c10753d224af9f1d0717e6c6e08239", size = 4000900, upload-time = "2025-12-06T19:00:35.643Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/bd/04453183a7a2be2b2778f0e01f70a9fb104759efa4fd9c8d118920b8b5fa/colour_demosaicing-0.2.7-py3-none-any.whl", hash = "sha256:4490d10583b9293d090d651ee9528fb67794e607c9153ee039479f0d431ddd64", size = 3263453, upload-time = "2025-12-06T19:00:40.495Z" },
+]
+
+[[package]]
+name = "colour-science"
+version = "0.4.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f4/66/6e2216ffae6f0008118c99d6f425f7591e688671ab99f5636f7f65021395/colour_science-0.4.7.tar.gz", hash = "sha256:b34773dc4dd3f9ba99cca5297fa10e9f532134d994b3a2308dacbe970dfd5079", size = 13283171, upload-time = "2025-12-06T08:15:08.229Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/9e/ce54e33f383d7e1432be9fb39557477779ccb155c60033c491609936dacf/colour_science-0.4.7-py3-none-any.whl", hash = "sha256:fe2383d86e507fc11a4b5206ff31a7399031e0dce527e22ec06eeb491d45d9a7", size = 9065613, upload-time = "2025-12-06T08:15:14.908Z" },
+]
+
+[[package]]
 name = "cuda-bindings"
 version = "13.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -285,6 +313,19 @@ wheels = [
 ]
 
 [[package]]
+name = "imageio"
+version = "2.38.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f3/cd/69e4ac55b6dafdd2b5f32075236841a3945dea7323d0232d80f28c37cea8/imageio-2.38.1.tar.gz", hash = "sha256:6769f1f01c4dd46448307863a787c9a22fa4dbe11c0c88f525c6e410fdfd7983", size = 403667, upload-time = "2026-10-08T14:35:32.961Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/8a/3b7f62b9df56460959f1b9bef094248d2a4d7f393c5b0d2da8efcdf0e40e/imageio-2.38.1-py3-none-any.whl", hash = "sha256:36d23eb7423d2fb63f637098758edb3d2df3687f7125e0a5ce8596572022dcf9", size = 328389, upload-time = "2026-10-08T14:35:31.075Z" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -311,7 +352,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
-    { name = "l16-web-lab" },
+    { name = "l16-web-lab", extra = ["demosaic"] },
     { name = "pyobjc-framework-quartz" },
     { name = "pyobjc-framework-vision" },
     { name = "pyusb" },
@@ -330,7 +371,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "l16-web-lab", editable = "../backend" },
+    { name = "l16-web-lab", extras = ["demosaic"], editable = "../backend" },
     { name = "pyobjc-framework-quartz", specifier = ">=10.3" },
     { name = "pyobjc-framework-vision", specifier = ">=10.3" },
     { name = "pyusb", specifier = ">=1.3.1" },
@@ -362,6 +403,11 @@ dependencies = [
     { name = "structlog" },
     { name = "tifffile" },
     { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+demosaic = [
+    { name = "mizukage", extra = ["demosaic"] },
 ]
 
 [package.metadata]
@@ -468,6 +514,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/39/d2/241caf3769a6b1b39c5994f394cce84328bfaa5d1b07de3144c02ea00d47/mizukage-0.1.0.tar.gz", hash = "sha256:31c3f9d84cef0234009f255a4ee2a0fad07ee817bb423d95e2ec3d4f76a3f6f6", size = 212587, upload-time = "2026-06-30T06:32:28.072Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/97/f8/86aa4dc89c009d72b11ee242fd9ef609a8596ca38555046cca38e12ba5fa/mizukage-0.1.0-py3-none-any.whl", hash = "sha256:4c31616166e3264cacfa0106968e8c3a938beb7df725d3cb33f1b7d13b299ba8", size = 105531, upload-time = "2026-06-30T06:32:27.066Z" },
+]
+
+[package.optional-dependencies]
+demosaic = [
+    { name = "colour-demosaicing" },
 ]
 
 [[package]]

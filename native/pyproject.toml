@@ -5,7 +5,7 @@ license = "MIT"
 description = "L16 Web Lab: nativní služba na hostu (GPU přes PyTorch MPS, Apple Vision)"
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "l16-web-lab",
+    "l16-web-lab[demosaic]",
     "torch>=2.5",
     "pyobjc-framework-Vision>=10.3",
     "pyobjc-framework-Quartz>=10.3",

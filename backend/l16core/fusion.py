@@ -15,6 +15,7 @@ import numpy as np
 import structlog
 from numpy.typing import NDArray
 
+from l16core import merge as merge_mod
 from l16core.geometry import ModuleGeometry, relative_pose
 
 log = structlog.get_logger()
@@ -203,7 +204,9 @@ def fuse(
     chunk: int = 512,
     refine: bool = True,
     mono: FusionSource | None = None,
+    method: str = "wiener",
 ) -> FusionResult:
+    """method: "wiener" = slučování a odšumění po dlaždicích (merge.py), "pixel" = vážený průměr."""
     t0 = time.perf_counter()
     h, w = ref.rgb.shape[:2]
     ref_rgb = ref.rgb.astype(np.float32)
@@ -221,6 +224,7 @@ def fuse(
     lum_scale = max(float(np.percentile(ref_luma, 99.5)), 1e-6)
     ref_g = _gamma_luma(ref_rgb, lum_scale)
     per_module: dict[str, Any] = {}
+    aligned: list[merge_mod.Aligned] = []
     for src in sources:
         gain = ref.exposure / src.exposure  # převod do škály reference
         mapx = np.empty((h, w), np.float32)
@@ -273,6 +277,9 @@ def fuse(
         wgt = (agree * (1.0 / gain) * inside * ~sat).astype(np.float32)
         acc += wgt[..., None] * np.where(inside[..., None], x, 0)
         wsum += wgt
+        if method == "wiener":
+            # relativní rozptyl ve škále reference ≈ gain (výstřelový šum); model šumu se změří
+            aligned.append(merge_mod.Aligned(x, inside & ~sat, gain, src.geo.camera))
         per_module[src.geo.camera] = {
             "gain": round(gain, 3),
             "used_pct": round(float((wgt > 0.5 / gain).mean()) * 100, 1),
@@ -282,6 +289,13 @@ def fuse(
     fused = np.where(
         wsum[..., None] > 1e-6, acc / np.maximum(wsum, 1e-6)[..., None], ref_rgb
     ).astype(np.float32)
+    merge_stats: dict[str, Any] | None = None
+    if method == "wiener" and aligned:
+        del acc
+        fused, wsum, merge_stats = merge_mod.merge(ref_rgb, aligned)
+        for name, acc_frac in merge_stats.pop("accepted").items():
+            per_module[name]["accepted"] = acc_frac
+        aligned.clear()
     mono_stats: dict[str, Any] | None = None
     if mono is not None:
         # mono A2: převod podle hloubky jako u barevných modulů, pak sloučení jasu
@@ -324,6 +338,8 @@ def fuse(
         **quality_stats(ref_rgb, fused),
         "clipped_ref_pct": round(float(ref_sat.mean()) * 100, 2),
         "mono": mono_stats,
+        "method": method,
+        "merge": merge_stats,
         "seconds": round(time.perf_counter() - t0, 1),
     }
     log.info("fusion", **{k: v for k, v in stats.items() if k != "modules"})

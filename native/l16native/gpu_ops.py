@@ -185,8 +185,14 @@ def fuse(
     interp: str = "bicubic",
     flow_full: bool = True,
     mono: cpu_fusion.FusionSource | None = None,
+    method: str = "wiener",
     **_: Any,
 ) -> cpu_fusion.FusionResult:
+    """≡ l16core/fusion.py::fuse; slučování "wiener" v gpu_merge.py."""
+    from l16core import merge as merge_mod
+
+    from l16native import gpu_merge
+
     t0 = time.perf_counter()
     h, w = ref.rgb.shape[:2]
     ref_np = ref.rgb.astype(np.float32)
@@ -203,6 +209,7 @@ def fuse(
     half = (w, h) if flow_full else (w // 2, h // 2)
     ref_g = _gray8(R, lum_scale, half)
     per: dict[str, Any] = {}
+    aligned: list[merge_mod.Aligned] = []
     for src in sources:
         gain = ref.exposure / src.exposure
         Rr, tt = relative_pose(ref.geo, src.geo)
@@ -226,6 +233,15 @@ def fuse(
         wgt = agree * (1.0 / gain) * inside * ~sat
         acc += wgt[None] * torch.where(inside[None], x, torch.zeros_like(x))
         wsum += wgt
+        if method == "wiener":
+            aligned.append(
+                merge_mod.Aligned(
+                    _np(x),
+                    (inside & ~sat).cpu().numpy(),
+                    gain,
+                    src.geo.camera,
+                )
+            )
         per[src.geo.camera] = {
             "gain": round(gain, 3),
             "used_pct": round(float((wgt > 0.5 / gain).float().mean()) * 100, 1),
@@ -233,8 +249,16 @@ def fuse(
         }
         del S, warped, x, mx, my
     fused_t = torch.where(wsum[None] > 1e-6, acc / wsum.clamp_min(1e-6)[None], R)
+    del acc
     fused = _np(fused_t)
     weight = _np(wsum[None])
+    merge_stats: dict[str, Any] | None = None
+    if method == "wiener" and aligned:
+        fused, wmap, merge_stats = gpu_merge.merge(ref_np, aligned)
+        weight = wmap
+        for name, frac in merge_stats.pop("accepted").items():
+            per[name]["accepted"] = frac
+        aligned.clear()
     mono_stats: dict[str, Any] | None = None
     if mono is not None:
         # mono A2: převod jako u barevných modulů, pak sdílené slučování jasu (CPU)
@@ -260,6 +284,8 @@ def fuse(
         "seconds": round(time.perf_counter() - t0, 1),
         "engine": "gpu",
         "mono": mono_stats,
+        "method": method,
+        "merge": merge_stats,
     }
     log.info("fusion_gpu", **{k: v for k, v in stats.items() if k != "modules"})
     return cpu_fusion.FusionResult(fused, weight, stats)

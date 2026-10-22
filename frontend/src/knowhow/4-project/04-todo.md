@@ -8,17 +8,18 @@ lux reproduces Lumen byte for byte, so it is the Lumen reference. On 6 shots, lu
 noise at 52 MP and cleaner colour; we have sharper edges (+14…+59 %), a much cleaner depth map and
 are 3× faster. Ordered by impact:
 
-1. [ ] **Joint merge of all observations**: 4 stack frames × 4 colour modules = 16 observations at
+1. [x] **Joint merge of all observations** (done as two stages: stack within a module, then modules per tile with the measured noise of each source): 4 stack frames × 4 colour modules = 16 observations at
        night, merged at once per tile (frequency-domain Wiener, HDR+ style) with a noise model from the
        gain. lux merges per module, then across modules
-2. [ ] **Chroma + luma denoise** after fusion, guided by luma and the noise model (chroma noise in
+2. [x] **Chroma + luma denoise** after fusion (à trous wavelet, measured noise, texture floor). Noise now 25–70 % below lux on all measured shots, guided by luma and the noise model (chroma noise in
        shadows is the most visible gap)
 3. [ ] **Exposure from metadata** (Lumen adds the LRI ev offset, +3.2 EV at night) + local tone
        mapping using the fusion's HDR range
 4. [ ] **52 MP without artefacts, full frame**: reject misaligned B tiles (colour threads on
        backlit edges), B poses from `mirror_position`, sub-pixel super-resolution from the A modules
        where no B module reaches. Target 52–75 MP
-5. [ ] **Colour**: ForwardMatrix refit on a ColorChecker + HueSatMap (DCP) in the DNG
+5. [ ] **Colour + highlights** (now the top priority): two ColorMatrix/ForwardMatrix pairs by illuminant + HueSatMap (DCP) in the DNG (night greys come out greenish; lux interpolates two matrices), ForwardMatrix refit on a ColorChecker, highlight recovery to neutral (clipped lamps are magenta)
+   - [ ] 52 MP at night: B-module detail ghosts (doubled edges) on dark scenes
 6. [ ] **70 / 150 mm modes** (19 shots in the backup): B4 reference, C modules as detail
 7. [ ] **Depth as an output**: full resolution, GDepth and HEIC depth export (refocus in iPhone
        Photos), interactive parallax / 3D view in the browser
