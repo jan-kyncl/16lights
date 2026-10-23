@@ -118,11 +118,36 @@ def test_tone_exposure_and_neutrality() -> None:
         assert np.allclose(px, px[0], atol=1e-5)
     # Kontrast je ukotven ve střední šedé.
     np.testing.assert_allclose(apply_tone(grey, color, Edits(contrast=1.0)), base, atol=1e-4)
-    # Přepal zůstane neutrální i při silném WB.
-    hot = np.ones((1, 1, 3), dtype=np.float32)
-    c2 = ColorParams(wb=(2.0, 1.0, 1.6), ccm=color.ccm, illuminant=None)
-    px = apply_tone(hot, c2, Edits(exposure=-1.0), encode=False)[0, 0]
-    assert np.allclose(px, px[0])
+
+
+def test_recover_highlights_to_neutral() -> None:
+    from l16core.develop import recover_highlights
+
+    wb = (2.0, 1.0, 1.6)
+    # G saturovaný (při zisku vinětace 2 je saturace na 2.0), R a B pod saturací
+    rgb = np.array([[[0.6, 2.0, 0.9], [0.2, 0.5, 0.3]]], dtype=np.float32)
+    gain = np.full((1, 2), 2.0, dtype=np.float32)
+    out = recover_highlights(rgb, gain, wb)
+    u = out[0, 0] * np.asarray(wb)
+    assert np.allclose(u, u.max())  # po WB neutrální, jas z nejvyššího kanálu
+    np.testing.assert_array_equal(out[0, 1], rgb[0, 1])  # daleko od saturace beze změny
+
+
+def test_ccm_interpolation_by_cct() -> None:
+    from l16core.tone import ccm_for, neutral_to_cct
+
+    eye = list(np.eye(3).reshape(-1))
+    # ColorMatrix = identita: neutrál kamery je přímo XYZ, CCT jde spočítat z jeho xy.
+    a = {"name": "A", "temp": 2850.0, "cm": eye, "fm": eye}
+    d = {"name": "D65", "temp": 6504.0, "cm": eye, "fm": list((2 * np.eye(3)).reshape(-1))}
+    c = ColorParams(wb=(1, 1, 1), ccm=tuple(eye), illuminant=None, profiles=[a, d])
+    d65 = np.array([0.95047, 1.0, 1.08883])
+    assert abs(neutral_to_cct(c.profiles, 1.0 / d65) - 6504) < 30
+    a_xyz = np.array([1.0985, 1.0, 0.35585])
+    assert abs(neutral_to_cct(c.profiles, 1.0 / a_xyz) - 2856) < 30
+    # řádky CCM normalizované na součet 1 → šedá zůstává šedou při libovolné CCT
+    ccm, _ = ccm_for(c, np.array([1.3, 1.0, 0.8]))
+    np.testing.assert_allclose(ccm.sum(axis=1), 1.0, atol=1e-6)
 
 
 def test_straighten_keeps_center_and_fills_frame() -> None:

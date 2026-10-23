@@ -1,6 +1,6 @@
 # Roadmap & TODO
 
-Updated 2026-10-22 (night).
+Updated 2026-10-23.
 
 ## Plan: better than lux / Lumen (from the comparison of 2026-10-22)
 
@@ -18,7 +18,21 @@ are 3× faster. Ordered by impact:
 4. [ ] **52 MP without artefacts, full frame**: reject misaligned B tiles (colour threads on
        backlit edges), B poses from `mirror_position`, sub-pixel super-resolution from the A modules
        where no B module reaches. Target 52–75 MP
-5. [ ] **Colour + highlights** (now the top priority): two ColorMatrix/ForwardMatrix pairs by illuminant + HueSatMap (DCP) in the DNG (night greys come out greenish; lux interpolates two matrices), ForwardMatrix refit on a ColorChecker, highlight recovery to neutral (clipped lamps are magenta)
+5. [ ] **Colour + highlights** (now the top priority)
+   - [x] Profile selection bug fixed (ratios were compared with the inverse gains: daylight got A,
+         tungsten D65 → greenish night greys). CCM now from the CCT, interpolated between A and D65
+         (DNG SDK algorithm, Python + TS parity), following the edited WB
+   - [x] DNG: ColorMatrix/ForwardMatrix 1+2 (A, D65) straight from the LRI, as Lumen; scaled by the
+         maximum (the 99.99 % scaling clipped G only → magenta in raw developers)
+   - [x] Highlights to neutral in develop, from the true saturation level (vignetting gain map),
+         dilated; tone clip at 1.0 removed (fusion HDR above 1.0 now reaches the Highlights slider)
+   - [ ] Fusion saturation test still assumes 1.0 (`fusion.SATURATION`, also `gpu_ops`): compare
+         against the vignetting gain map of each module (corners are lifted up to 3.8×)
+   - [ ] **L16 look** (own HueSatMap + tone curve) fitted from camera JPEG ↔ RAW pairs (hundreds in the
+         backup). Camera JPEG and lux both render ~10–20 % warmer R/G and more saturated warm hues than our
+         colorimetric output; lux carries Lumen's DCP tables (HueSatMap 32×32 + ProfileToneCurve),
+         which we do not copy (Lumen data, GPL project). Optional "Camera look" in the editor + DCP in the DNG
+   - [ ] ForwardMatrix refit on a ColorChecker shot
    - [ ] 52 MP at night: B-module detail ghosts (doubled edges) on dark scenes
 6. [ ] **70 / 150 mm modes** (19 shots in the backup): B4 reference, C modules as detail
 7. [ ] **Depth as an output**: full resolution, GDepth and HEIC depth export (refocus in iPhone
@@ -133,7 +147,7 @@ are 3× faster. Ordered by impact:
       corner features or straight lines
 - [x] `BAYER_JPEG`: companded (sqrt-like), dequantisation table in the block header
 - [ ] Preview (19 MB) and full frame (78 MB) are sent uncompressed. Consider compression for remote use
-- [ ] Temperature/tint are relative multipliers, not Kelvin. The CCM is not interpolated with WB
+- [ ] Temperature/tint are relative multipliers, not Kelvin (the CCM does follow the WB now). A Kelvin slider is possible now that the CCT is known
 - [ ] Pre-existing mypy error in `app/jobs.py:71`
 - [x] ~~Stale preview after _Reprocess_~~: pixel endpoints now use `no-cache` + ETag (304 when unchanged)
 

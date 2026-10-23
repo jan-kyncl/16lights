@@ -37,7 +37,7 @@ from l16core import lri as lri_mod
 from l16core import native as native_mod
 from l16core import orientation as orient_mod
 from l16core.develop import Quality, develop, downscale, orient
-from l16core.tone import ColorParams, Edits, apply_tone, to_uint8
+from l16core.tone import ColorParams, Edits, apply_tone, color_params, to_uint8
 
 log = structlog.get_logger()
 
@@ -706,6 +706,21 @@ def camera_thumb(shot_dir: Path, devices_root: Path, cam: str, size: int) -> byt
     p.parent.mkdir(exist_ok=True)
     img.save(p, "JPEG", quality=85)
     return p.read_bytes()
+
+
+def refresh_color(shot_dir: Path) -> ColorParams:
+    """Přepočítá meta.color z LRI (barevné profily, CCT) bez nového zpracování.
+
+    Snímky jsou uložené v kamerovém RGB bez WB a CCM, takže stačí přepsat barevné parametry.
+    """
+    meta = load_meta(shot_dir)
+    lri = lri_mod.open_lri(shot_dir / "original.lri")
+    ref = meta["reference_camera"]
+    img = next(i for i in lri.images if i.camera_id.name == ref)
+    color = color_params(img.color_profiles, lri.metadata.awb_gains)
+    meta["color"] = color.to_dict()
+    write_json(shot_dir / "meta.json", meta)
+    return color
 
 
 def load_meta(shot_dir: Path) -> dict[str, Any]:

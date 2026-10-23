@@ -650,6 +650,14 @@ function geometry(e: Edits): Pick<Edits, "flip_h" | "flip_v" | "source" | "rotat
   };
 }
 
+/** „4777 K · A ↔ D65“ (interpolace profilů), starší snímky jen název profilu. */
+function colorInfo(c: ShotMeta["color"]): string | null {
+  if (c.profiles?.length && c.cct) {
+    return `${Math.round(c.cct)} K · ${c.profiles.map((p) => p.name).join(" ↔ ")}`;
+  }
+  return c.illuminant;
+}
+
 function infoPanel(meta: ShotMeta, shotId: string): HTMLElement {
   const i = meta.info;
   const d = t();
@@ -659,7 +667,7 @@ function infoPanel(meta: ShotMeta, shotId: string): HTMLElement {
     [d.module, `${meta.reference_camera} (${meta.full.width}×${meta.full.height})`],
     [d.modules, i.cameras.map((c) => c.camera).join(" ")],
     [d.calibrationRow, meta.calibration_mode === "device" ? d.deviceProfile : d.lriHeader],
-    [d.ccmIlluminant, meta.color.illuminant ?? d.noneIdentity],
+    [d.ccmIlluminant, colorInfo(meta.color) ?? d.noneIdentity],
     [d.firmware, i.firmware_version || "?"],
     ...(meta.vision
       ? [

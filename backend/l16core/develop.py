@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from enum import StrEnum
 
+import cv2
 import numpy as np
 import structlog
 from mizukage import DemosaicKernel, LriFile, Orientation, RawImage
@@ -27,11 +28,52 @@ class Quality(StrEnum):
 @dataclass(slots=True)
 class Developed:
     camera: str
-    rgb: F32  # (H, W, 3) lineární kamerové RGB, 1.0 = bod saturace senzoru
+    rgb: F32  # (H, W, 3) lineární kamerové RGB, 1.0 = saturace senzoru (× zisk vinětace)
     color: ColorParams
     calibration_mode: str
     vignetting: bool
     hot_pixels: bool
+
+
+# Podíl saturace senzoru, od kterého se pixel plynule stahuje do neutrální (plně při CLIP_FULL).
+CLIP_START = 0.80
+CLIP_FULL = 0.99
+
+
+def vignetting_gain(vig: NDArray[np.float32] | None, shape: tuple[int, int]) -> F32:
+    """Zisk korekce vinětace v rozměru výstupu: saturace senzoru je v datech na úrovni g(x, y)."""
+    if vig is None:
+        return np.ones(shape, dtype=np.float32)
+    from mizukage._calib import apply_vignetting_correction
+
+    gain: F32 = apply_vignetting_correction(np.ones(shape, dtype=np.float32), vig).astype(
+        np.float32
+    )
+    return gain
+
+
+def recover_highlights(
+    rgb: F32, gain: F32, wb: tuple[float, float, float], radius: int = 3
+) -> F32:
+    """Přepal do neutrální: blízko saturace kteréhokoli kanálu se barva (po WB) stáhne k nejvyšší
+    hodnotě kanálů. Nahrazuje tvrdý ořez v tónování, který nevěděl o vinětaci (saturace je
+    rgb = g, ne 1.0) a nechával na okraji přepalu barevné lemy.
+
+    Mapa saturace se roztáhne o `radius` px: demozaika dopočítá sousedům přepalu kanály
+    z ořezaných hodnot, takže mají chybný poměr kanálů, i když samy saturované nejsou.
+    """
+    frac = rgb.max(axis=2) / gain
+    if float(frac.max()) < CLIP_START:
+        return rgb
+    k = 2 * radius + 1
+    frac = cv2.dilate(frac, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    t = np.clip((frac - CLIP_START) / (CLIP_FULL - CLIP_START), 0.0, 1.0)
+    w = cv2.GaussianBlur(t * t * (3.0 - 2.0 * t), (k, k), 0)[..., None]
+    wbv = np.asarray(wb, dtype=np.float32)
+    u = rgb * wbv
+    u += (u.max(axis=2, keepdims=True) - u) * w
+    out: F32 = (u / wbv).astype(np.float32)
+    return out
 
 
 def full_kernel() -> DemosaicKernel:
@@ -81,9 +123,12 @@ def develop(
         vignetting_grid=vig,
     )
     rgb = (rgb / np.float32(img.white_level)).astype(np.float32)
+    color = color_params(img.color_profiles, lri.metadata.awb_gains)
+    if rgb.ndim == 3 and not img.sensor_model.name.endswith("MONO"):
+        gain = vignetting_gain(vig, rgb.shape[:2])
+        rgb = recover_highlights(rgb, gain, color.wb, 2 if quality == Quality.PREVIEW else 3)
     if oriented:
         rgb = orient(rgb, lri.metadata.orientation)
-    color = color_params(img.color_profiles, lri.metadata.awb_gains)
     log.info(
         "develop",
         camera=cam.name,

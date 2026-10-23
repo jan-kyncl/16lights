@@ -13,20 +13,38 @@
    - full resolution: **Menon 2007 (DDFAPD)** (`colour-demosaicing`), 2.4 s per 13 MP module;
      sharper and 3× faster than Malvar–He–Cutler. Bilinear only as a fallback. Until 2026-10-22 the
      native service lacked the package, so the fusion silently used bilinear (visibly soft vs. Lumen).
-5. **Normalise** by the white level → 1.0 = sensor saturation.
-6. **Orient** for display (180° sensor mount + IMU), not for geometry work.
+5. **Normalise** by the white level → 1.0 = sensor saturation **× vignetting gain** (the flat-field
+   grid lifts the corners up to 3.8×, so a saturated corner pixel reads 3.8, not 1.0).
+6. **Highlights to neutral** (`develop.recover_highlights`): saturation fraction `max(rgb) / g`, with
+   `g` the vignetting gain at that pixel (measured: a sharp spike at exactly 1.000 in every channel,
+   also for stacked night captures). The fraction map is dilated by 2–3 px (demosaicing gives the
+   neighbours of a clipped pixel wrong channel ratios) and from 0.80 to 0.99 the colour after WB is
+   blended towards its largest channel. Blown lamps come out white with a soft edge, no magenta /
+   lavender rim. Mono modules are left alone.
+7. **Orient** for display (180° sensor mount + IMU), not for geometry work.
 
 > Mono modules: `to_debayered_numpy(half_res=True)` returns **full resolution**, because there is
 > nothing to debayer. Always resize by the actual array shape.
 
 ## 2. Colour parameters
 
-Computed once per shot (`tone.color_params`):
+Computed once per shot (`tone.color_params`), stored in `meta.color`:
 
 - **White balance** from the AWB gains in the header: `wb = (r/g, 1, b/g)`, with `g = (gr + gb)/2`.
-- **CCM**: pick the factory colour profile whose (r/g, b/g) ratios are closest to the AWB gains,
-  then `CCM = XYZ_D50→sRGB · forward_matrix`. The rows are normalised to sum to 1, so a neutral grey
-  stays neutral even with slight matrix errors.
+- **Factory profiles**: every module carries three (A, F11, D65) with a `ColorMatrix` (XYZ → camera)
+  and a `ForwardMatrix` (camera after WB → XYZ D50) in exact DNG semantics (checked: `CM · white` hits
+  the stored r/g, b/g ratios, `FM · 1` = D50 white). We keep **A and D65**, like Lumen (lux writes the
+  very same matrices into its DNG); F11 matched the camera JPEG worse on daylight shots.
+- **CCM from the CCT** (`tone.ccm_for`, DNG SDK algorithm): neutral = 1/gains → iterate
+  `xy = XYZ(inv(CM(T)) · neutral)`, `T = CCT(xy)` (McCamy), with `CM(T)` interpolated linearly in 1/T
+  between A (2850 K) and D65 (6504 K) → `CCM = XYZ_D50→sRGB · FM(T)`, rows normalised to sum to 1
+  (grey stays grey). Night street lamps come out at ~2200 K (clamped to A), daylight at 4300–5000 K.
+- The CCM follows the **edited** WB: temperature / tint change the neutral, so the CCT and the matrix
+  move with them. The preview computes the same in `frontend/src/color.ts` (parity ≤ 2·10⁻⁷).
+- Old bug (until 2026-10-23): the profile was picked by comparing its r/g, b/g ratios (sensor
+  response to white) with the AWB *gains* (their inverse), so daylight got the A matrix and
+  tungsten got D65: greenish greys at night. `l16 recolor data/shots` rewrites `meta.color` of
+  existing shots without reprocessing.
 
 ## 3. Tone pipeline
 
@@ -34,9 +52,8 @@ Computed once per shot (`tone.color_params`):
 (preview) implement **the same formula**. Change both together.
 
 ```
-v   = cam · 2^EV · gains                        1. exposure + WB
-v   = min(v, 2^EV · min(gains))                    highlight clip on the lowest saturating channel
-v   = max(CCM · v, 0)                           2. camera RGB → linear sRGB
+v   = cam · 2^EV · gains                        1. exposure + WB (no clip, see develop step 6)
+v   = max(CCM(gains) · v, 0)                    2. camera RGB → linear sRGB
 y   = lum(v)^(1/2.2)                            3. highlights / shadows
 ev  = H · smoothstep(0.45, 1, y) + S · (1 − smoothstep(0, 0.45, y))
 v  *= 2^ev
@@ -47,9 +64,12 @@ out = sRGB_OETF(v)                              6. encode
 ```
 
 - `gains` = as-shot WB × temperature/tint multipliers `(2^(T/2), 2^(−Tint/2), 2^(−T/2))`.
-  Temperature and tint are relative, **not Kelvin**, and the CCM is not re-interpolated.
+  Temperature and tint are relative, **not Kelvin**; the CCM is re-interpolated for the result.
 - `lum` uses Rec. 709 weights (0.2126, 0.7152, 0.0722).
-- The highlight clip keeps blown areas neutral instead of turning magenta.
+- There is no highlight clip any more: the old `min(v, 2^EV · min(gains))` assumed saturation at 1.0,
+  flattened the fusion's HDR range and the vignetting-lifted corners, and left coloured rims at the
+  clip edge. Blown areas are made neutral in the data (develop step 6), values above 1.0 stay, so the
+  _Highlights_ slider can pull them back.
 
 **Parity check:** a WebGL screenshot against the server export with all sliders moved gives a max
 difference of 1.7/255 (`docs/progress/M2`).
@@ -73,13 +93,17 @@ The DNG carries the **linear camera RGB after fusion / refocus / 52 MP detail**,
 edit, so Lightroom, Camera Raw, Capture One or Apple Photos develop it like a raw file, with the
 multi-camera noise reduction already baked in.
 
-- 16-bit, 3 samples, uncompressed (78 MB at 13 MP, 311 MB at 52 MP). 1.0 = sensor saturation; if the
-  fusion pushes highlights above 1.0 (HDR), the data is scaled down and `BaselineExposure` compensates.
+- 16-bit, 3 samples, uncompressed (78 MB at 13 MP, 311 MB at 52 MP). The data is scaled by its
+  **maximum** (fusion HDR and vignetting go above 1.0) and `BaselineExposure` compensates. Scaling by
+  the 99.99th percentile (before 2026-10-23) clipped the brightest pixels in G only, and raw
+  developers turned them magenta after WB.
 - Baked in: geometry edits (rotate, straighten, flip) and refocus. Exposure goes to `BaselineExposure`,
   temperature / tint to `AsShotNeutral`. Contrast, highlights, shadows and saturation are left to the
   raw developer.
-- Colour: `ForwardMatrix1 = sRGB→XYZ(D50) · CCM` (the CCM keeps white), `ColorMatrix1` = its inverse
-  with the WB gains, illuminant D50, so `AsShotNeutral = 1/WB` lands exactly on D50 white.
+- Colour: `ColorMatrix1/2` + `ForwardMatrix1/2` = the factory A and D65 profiles from the LRI,
+  `CalibrationIlluminant1/2` = 17 / 21, `AsShotNeutral` = 1/gains (with temperature / tint). The raw
+  developer interpolates the matrices by the neutral exactly like the app. Shots without stored
+  profiles fall back to one pair at D50 derived from the CCM.
 - Verified by decoding with macOS Core Image RAW (`sips`): colours, white balance and orientation match
   the JPEG export.
 

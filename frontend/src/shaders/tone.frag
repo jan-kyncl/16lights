@@ -46,10 +46,9 @@ float peakMask(float e) {
 }
 
 vec3 tone(vec3 cam) {
-  // 1. expozice + 2. WB, ořez přepalu na nejnižší saturující kanál
+  // 1. expozice + 2. WB (přepaly jsou už v datech stažené do neutrální, bez ořezu)
   float e = exp2(uExposure);
   vec3 v = cam * (e * uGains);
-  v = min(v, vec3(e * min(uGains.r, min(uGains.g, uGains.b))));
 
   // 3. CCM
   v = max(uCcm * v, 0.0);

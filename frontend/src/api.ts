@@ -5,10 +5,19 @@ import type { CameraDetail } from "./modulesPage";
 
 const BASE = "api";
 
+export interface ColorProfile {
+  name: string;
+  temp: number; // K
+  cm: number[]; // ColorMatrix XYZ → kamera, řádkově
+  fm: number[]; // ForwardMatrix kamera po WB → XYZ D50, řádkově
+}
+
 export interface ColorParams {
   wb: [number, number, number];
   ccm: number[];
   illuminant: string | null;
+  profiles?: ColorProfile[];
+  cct?: number | null;
 }
 
 export interface Edits {

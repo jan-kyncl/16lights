@@ -1,5 +1,6 @@
 import toneFrag from "./shaders/tone.frag?raw";
 import type { ColorParams, Edits } from "./api";
+import { ccmFor } from "./color";
 import { t } from "./i18n";
 
 const VERT = `#version 300 es
@@ -269,7 +270,7 @@ export class Renderer {
     gl.uniform1f(this.loc.uExposure, e.exposure);
     gl.uniform3fv(this.loc.uGains, gains);
     // CCM je row-major → transpose=true
-    gl.uniformMatrix3fv(this.loc.uCcm, true, color.ccm);
+    gl.uniformMatrix3fv(this.loc.uCcm, true, ccmFor(color, gains).ccm);
     gl.uniform1f(this.loc.uHighlights, e.highlights);
     gl.uniform1f(this.loc.uShadows, e.shadows);
     gl.uniform1f(this.loc.uContrast, e.contrast);

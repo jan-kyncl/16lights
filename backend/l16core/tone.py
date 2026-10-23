@@ -7,12 +7,12 @@ export na serveru renderuje stejné úpravy jako živý náhled v prohlížeči.
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 import cv2
 import numpy as np
-from mizukage import AwbGains, ColorProfile, Illuminant
+from mizukage import AwbGains, ColorProfile
 from numpy.typing import NDArray
 
 F32 = NDArray[np.float32]
@@ -31,20 +31,43 @@ XYZ_D50_TO_SRGB = np.array(
 )
 
 
+# Interpolují se jen profily A a D65 jako v Lumenu (lux) a v DNG se dvěma iluminanty; F11
+# z LRI vycházel na denních snímcích hůř (odstín proti JPEG z foťáku, 2026-10-23).
+# Teploty tak, jak je převádí DNG SDK (shodně v `frontend/src/color.ts`), aby raw konvertor
+# interpoloval matice z exportovaného DNG stejně jako aplikace.
+ILLUMINANT_TEMP = {"A": 2850.0, "D65": 6504.0}
+ILLUMINANT_EXIF = {"A": 17, "D65": 21}  # DNG CalibrationIlluminant
+D50_XY = (0.34567, 0.35850)
+
+
 @dataclass(slots=True)
 class ColorParams:
-    """As-shot barevné parametry snímku: WB zisky a CCM (kamerové RGB po WB → lin. sRGB)."""
+    """As-shot barevné parametry snímku.
+
+    `wb` = AWB zisky, `profiles` = tovární profily modulu seřazené podle teploty (ColorMatrix
+    XYZ → kamera, ForwardMatrix kamera po WB → XYZ D50, řádkově). `ccm` (kamerové RGB po WB →
+    lin. sRGB) a `cct` jsou předpočítané pro as-shot WB; s úpravou teploty se CCM počítá znovu
+    (`ccm_for`). Starší meta.json bez `profiles` používají pevné `ccm`.
+    """
 
     wb: tuple[float, float, float]
     ccm: tuple[float, ...]
     illuminant: str | None
+    profiles: list[dict[str, Any]] = field(default_factory=list)
+    cct: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ColorParams:
-        return cls(wb=tuple(d["wb"]), ccm=tuple(d["ccm"]), illuminant=d.get("illuminant"))
+        return cls(
+            wb=tuple(d["wb"]),
+            ccm=tuple(d["ccm"]),
+            illuminant=d.get("illuminant"),
+            profiles=list(d.get("profiles") or []),
+            cct=d.get("cct"),
+        )
 
 
 @dataclass(slots=True)
@@ -109,13 +132,61 @@ def straighten(img: NDArray[Any], deg: float) -> NDArray[Any]:
     return out
 
 
-def _best_profile(profiles: list[ColorProfile], gains: AwbGains | None) -> ColorProfile | None:
-    if not profiles:
-        return None
-    if gains is None:
-        return next((p for p in profiles if p.illuminant == Illuminant.D65), profiles[0])
-    rg, bg = gains.r / gains.gr, gains.b / gains.gb
-    return min(profiles, key=lambda p: (p.rg_ratio - rg) ** 2 + (p.bg_ratio - bg) ** 2)
+def _xy_to_xyz(x: float, y: float) -> NDArray[np.float64]:
+    return np.array([x / y, 1.0, (1.0 - x - y) / y])
+
+
+def xy_to_cct(x: float, y: float) -> float:
+    """McCamy (1992); v rozsahu 2000–12500 K odchylka od Robertsona do ~2 K."""
+    n = (x - 0.3320) / (0.1858 - y)
+    return float(449.0 * n**3 + 3525.0 * n**2 + 6823.3 * n + 5520.33)
+
+
+def _interp(profiles: list[dict[str, Any]], key: str, cct: float) -> NDArray[np.float64]:
+    """Matice profilu interpolovaná lineárně v 1/T mezi sousedními profily (jako DNG SDK)."""
+    mats = [np.asarray(p[key], dtype=np.float64).reshape(3, 3) for p in profiles]
+    temps = [float(p["temp"]) for p in profiles]
+    if len(mats) == 1 or cct <= temps[0]:
+        return mats[0]
+    if cct >= temps[-1]:
+        return mats[-1]
+    i = next(k for k in range(1, len(temps)) if cct <= temps[k])
+    g = (1.0 / cct - 1.0 / temps[i]) / (1.0 / temps[i - 1] - 1.0 / temps[i])
+    return g * mats[i - 1] + (1.0 - g) * mats[i]
+
+
+def neutral_to_cct(profiles: list[dict[str, Any]], gains: NDArray[Any]) -> float:
+    """CCT z kamerového neutrálu (1/zisky) iterací přes interpolovanou ColorMatrix (DNG SDK)."""
+    neutral = 1.0 / np.asarray(gains, dtype=np.float64)
+    neutral = neutral / neutral[1]
+    x, y = D50_XY
+    for _ in range(30):
+        cct = min(max(xy_to_cct(x, y), 1500.0), 25000.0)
+        xyz = np.linalg.solve(_interp(profiles, "cm", cct), neutral)
+        nx, ny = float(xyz[0] / xyz.sum()), float(xyz[1] / xyz.sum())
+        done = abs(nx - x) + abs(ny - y) < 1e-7
+        # Polovina kroku tlumí oscilaci na zlomu mezi dvojicemi profilů.
+        x, y = 0.5 * (x + nx), 0.5 * (y + ny)
+        if done:
+            break
+    return min(max(xy_to_cct(x, y), 1500.0), 25000.0)
+
+
+def forward_to_ccm(fm: NDArray[Any]) -> NDArray[np.float32]:
+    ccm = XYZ_D50_TO_SRGB.astype(np.float64) @ np.asarray(fm, dtype=np.float64)
+    # Neutrální šedá má zůstat neutrální i při malé nepřesnosti matic.
+    rows = ccm.sum(axis=1, keepdims=True)
+    if np.all(rows > 1e-3):
+        ccm = ccm / rows
+    return ccm.astype(np.float32)
+
+
+def ccm_for(color: ColorParams, gains: NDArray[Any]) -> tuple[NDArray[np.float32], float | None]:
+    """CCM pro dané WB zisky: CCT z neutrálu → ForwardMatrix interpolovaná v 1/T."""
+    if not color.profiles:
+        return np.asarray(color.ccm, dtype=np.float32).reshape(3, 3), color.cct
+    cct = neutral_to_cct(color.profiles, gains)
+    return forward_to_ccm(_interp(color.profiles, "fm", cct)), cct
 
 
 def color_params(profiles: list[ColorProfile], gains: AwbGains | None) -> ColorParams:
@@ -124,21 +195,33 @@ def color_params(profiles: list[ColorProfile], gains: AwbGains | None) -> ColorP
         wb = (gains.r / g, 1.0, gains.b / g)
     else:
         wb = (1.0, 1.0, 1.0)
-    prof = _best_profile(profiles, gains)
-    if prof is None:
-        ccm = np.eye(3, dtype=np.float32)
-    else:
-        fm = np.asarray(prof.forward_matrix, dtype=np.float32).reshape(3, 3)
-        ccm = XYZ_D50_TO_SRGB @ fm
-        # Neutrální šedá má zůstat neutrální i při malé nepřesnosti matic.
-        rows = ccm.sum(axis=1, keepdims=True)
-        if np.all(rows > 1e-3):
-            ccm = ccm / rows
-    return ColorParams(
-        wb=(float(wb[0]), float(wb[1]), float(wb[2])),
-        ccm=tuple(float(x) for x in ccm.reshape(-1)),
-        illuminant=prof.illuminant.name if prof else None,
+    profs = sorted(
+        (
+            {
+                "name": p.illuminant.name,
+                "temp": ILLUMINANT_TEMP[p.illuminant.name],
+                "cm": [float(v) for v in np.asarray(p.color_matrix).reshape(-1)],
+                "fm": [float(v) for v in np.asarray(p.forward_matrix).reshape(-1)],
+            }
+            for p in profiles
+            if p.illuminant.name in ILLUMINANT_TEMP
+        ),
+        key=lambda p: p["temp"],
     )
+    color = ColorParams(wb=wb, ccm=tuple(np.eye(3).reshape(-1)), illuminant=None, profiles=profs)
+    if not profs:
+        return color
+    ccm, cct = ccm_for(color, np.asarray(wb))
+    color.ccm = tuple(float(x) for x in ccm.reshape(-1))
+    color.cct = round(float(cct), 1) if cct is not None else None
+    color.illuminant = nearest_illuminant(profs, color.cct)
+    return color
+
+
+def nearest_illuminant(profiles: list[dict[str, Any]], cct: float | None) -> str | None:
+    if not profiles or cct is None:
+        return None
+    return str(min(profiles, key=lambda p: abs(1.0 / p["temp"] - 1.0 / cct))["name"])
 
 
 def wb_gains(color: ColorParams, edits: Edits) -> NDArray[np.float32]:
@@ -169,11 +252,10 @@ def apply_tone(cam_rgb: F32, color: ColorParams, edits: Edits, *, encode: bool =
     """Kamerové lineární RGB (H, W, 3) → sRGB [0..1] (nebo lineární sRGB při encode=False)."""
     exp = np.float32(2.0**edits.exposure)
     gains = wb_gains(color, edits)
+    # Přepaly jsou už v datech stažené do neutrální (develop.recover_highlights), bez ořezu.
     v = cam_rgb.astype(np.float32) * (exp * gains)
-    # Přepal: kanál saturuje na zisk*expozice; ořez na nejnižší drží světla neutrální.
-    np.minimum(v, exp * gains.min(), out=v)
 
-    ccm = np.asarray(color.ccm, dtype=np.float32).reshape(3, 3)
+    ccm, _ = ccm_for(color, gains)
     v = np.maximum(v @ ccm.T, 0.0)
 
     lum = v @ LUMA
