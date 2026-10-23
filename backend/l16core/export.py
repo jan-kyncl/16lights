@@ -14,7 +14,7 @@ import structlog
 import tifffile
 from PIL import Image
 
-from l16core import refocus, shot
+from l16core import __version__, refocus, shot
 from l16core.tone import (
     ILLUMINANT_EXIF,
     XYZ_D50_TO_SRGB,
@@ -209,5 +209,5 @@ def write_dng(
         subfiletype=0,
         extratags=tags,
         metadata=None,
-        software="L16 Web Lab",
+        software=f"L16 Web Lab {__version__}",
     )

@@ -246,3 +246,20 @@ def test_auto_exposure_brightens_dark_scenes(synth_lri: Path) -> None:
     dark = auto_exposure(f, img, data, np.full((8, 8, 3), 0.002, np.float32), color)
     assert dark["ev"] > bright["ev"]
     assert -2.0 <= bright["ev"] <= 3.0
+
+
+def test_versions_match() -> None:
+    """Jedna verze pro backend, native i frontend (zdroj: backend/pyproject.toml)."""
+    import tomllib
+
+    import l16core
+
+    root = Path(__file__).resolve().parents[2]
+    ver = tomllib.loads((root / "backend" / "pyproject.toml").read_text())["project"]["version"]
+    assert l16core.__version__ == ver
+    native = root / "native" / "pyproject.toml"
+    frontend = root / "frontend" / "package.json"
+    if not native.exists() or not frontend.exists():
+        pytest.skip("mimo celý repozitář (Docker build context)")
+    assert tomllib.loads(native.read_text())["project"]["version"] == ver
+    assert json.loads(frontend.read_text())["version"] == ver

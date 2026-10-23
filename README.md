@@ -115,6 +115,13 @@ npm run build && npm run format:check
 are two implementations of the same computation, so change both together. **Restart the native
 service after every backend change** (version check).
 
+### Releasing
+
+1. Bump the version in `backend/pyproject.toml`, `native/pyproject.toml` and `frontend/package.json`
+   (`npm version X.Y.Z --no-git-tag-version`), then `uv lock` in `backend/` and `native/`.
+2. Add the section to `CHANGELOG.md`, commit, tag `vX.Y.Z`, push with `--tags`.
+3. GitHub release from the tag with the changelog section (`gh release create vX.Y.Z --notes-file …`).
+
 ## Credits
 
 This project stands on the work of the Light L16 community and on published research. Thank you!

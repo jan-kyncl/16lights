@@ -147,7 +147,7 @@ export async function renderLibrary(root: HTMLElement): Promise<void> {
   const toolbar = h(
     "div",
     { class: "toolbar" },
-    h("h1", {}, "L16 Web Lab"),
+    h("h1", {}, "L16 Web Lab ", h("small", { class: "version" }, `v${__APP_VERSION__}`)),
     filter,
     h("button", { class: "primary", onclick: () => fileInput.click() }, t().uploadLri),
     h(

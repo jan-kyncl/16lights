@@ -172,6 +172,9 @@ const en = {
   ccmIlluminant: "Colour (as shot)",
   noneIdentity: "none (identity)",
   firmware: "Firmware",
+  processedBy: "Processed by",
+  processedOlder: (v: string, cur: string) =>
+    `v${v} (current v${cur}: Reprocess for the latest pipeline)`,
   processing: "Processing",
   visionRow: "Apple Vision",
   visionInfo: (faces: number, person: number, horizon: number | null) =>
@@ -382,6 +385,8 @@ const cs: Dict = {
   ccmIlluminant: "Barvy (as shot)",
   noneIdentity: "žádný (identita)",
   firmware: "Firmware",
+  processedBy: "Zpracováno verzí",
+  processedOlder: (v, cur) => `v${v} (aktuální v${cur}: pro nejnovější zpracování Přepočítat)`,
   processing: "Zpracování",
   visionRow: "Apple Vision",
   visionInfo: (faces, person, horizon) =>

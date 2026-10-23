@@ -83,6 +83,8 @@ export interface ShotMeta {
   reference_camera: string;
   calibration_mode: string;
   color: ColorParams;
+  /** Verze L16 Web Lab, která snímek zpracovala (starší snímky ji nemají). */
+  version?: string;
   /** Automatická expozice jako JPEG z foťáku (EV), starší snímky ji nemají. */
   auto_exposure?: { ev: number; capture_ratio_ev: number | null; log_mean_luma: number };
   preview: { width: number; height: number; format: string };

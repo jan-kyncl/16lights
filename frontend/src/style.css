@@ -84,6 +84,12 @@ button.primary {
   margin: 0 auto 0 0;
 }
 
+.toolbar h1 .version {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.55;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

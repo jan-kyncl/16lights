@@ -20,7 +20,7 @@ from PIL import Image
 
 from app import jobs
 from app.config import get_settings
-from l16core import calibration, export, lelr, native, shot
+from l16core import __version__, calibration, export, lelr, native, shot
 from l16core.develop import downscale
 from l16core.logs import setup_logging
 from l16core.tone import ColorParams, Edits, apply_tone, load_look, to_uint8
@@ -74,7 +74,7 @@ def queue_processing(shot_id: str, camera: str | None = None) -> dict[str, Any]:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "data_dir": str(settings.data_dir)}
+    return {"ok": True, "version": __version__, "data_dir": str(settings.data_dir)}
 
 
 @app.get("/api/looks/{name}")

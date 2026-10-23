@@ -32,7 +32,7 @@ import structlog
 from mizukage import Orientation
 from PIL import Image
 
-from l16core import calibration, depth, detail, fusion, geometry
+from l16core import __version__, calibration, depth, detail, fusion, geometry
 from l16core import exposure as exposure_mod
 from l16core import lri as lri_mod
 from l16core import native as native_mod
@@ -244,6 +244,7 @@ def process(
         "warnings": warnings,
         "timings": timings,
         "processed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "version": __version__,  # verze L16 Web Lab, která snímek zpracovala
     }
     write_json(shot_dir / "meta.json", meta)
     step("done", 1.0)

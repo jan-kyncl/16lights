@@ -20,6 +20,7 @@ import torch
 from fastapi import FastAPI, HTTPException, Response
 from l16core import calibration, export, shot
 from l16core.detail import unorient
+from l16core import __version__
 from l16core.native import CODE_VERSION as native_code_version
 from l16core.tone import ColorParams, Edits, apply_tone, to_uint8
 from mizukage import Orientation
@@ -47,6 +48,7 @@ def health() -> dict[str, Any]:
         "ok": True,
         "mps": torch.backends.mps.is_available(),
         "data": str(DATA),
+        "version": __version__,
         "code": native_code_version,  # otisk l16core při startu služby
     }
 

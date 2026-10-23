@@ -714,6 +714,12 @@ function infoPanel(meta: ShotMeta, shotId: string): HTMLElement {
     [d.calibrationRow, meta.calibration_mode === "device" ? d.deviceProfile : d.lriHeader],
     [d.ccmIlluminant, colorInfo(meta.color) ?? d.noneIdentity],
     [d.firmware, i.firmware_version || "?"],
+    [
+      d.processedBy,
+      meta.version === __APP_VERSION__
+        ? `v${meta.version}`
+        : d.processedOlder(meta.version ?? "0.1", __APP_VERSION__),
+    ],
     ...(meta.vision
       ? [
           [
