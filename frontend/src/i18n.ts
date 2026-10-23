@@ -27,6 +27,11 @@ const en = {
 
   // editor – tón
   tone: "Tone",
+  look: "Look",
+  lookL16: "L16 camera",
+  lookL16Hint: "Tone curve and colours fitted to the camera's own JPEGs (also embedded in DNG)",
+  lookNone: "Linear",
+  lookNoneHint: "Scene-linear sRGB without a tone curve (flat, for your own grading)",
   exposure: "Exposure (EV)",
   temperature: "Temperature",
   tint: "Tint (green ↔ magenta)",
@@ -239,6 +244,11 @@ const cs: Dict = {
   lightcalHint: "lightcal.zip, nebo calibration.lri + hotpixel.rec",
 
   tone: "Tón",
+  look: "Look",
+  lookL16: "L16 (foťák)",
+  lookL16Hint: "Tónová křivka a barvy nafitované na JPEG z foťáku (vloží se i do DNG)",
+  lookNone: "Lineární",
+  lookNoneHint: "Lineární sRGB bez tónové křivky (ploché, pro vlastní grading)",
   exposure: "Expozice (EV)",
   temperature: "Teplota",
   tint: "Tón (zelená ↔ purpur)",

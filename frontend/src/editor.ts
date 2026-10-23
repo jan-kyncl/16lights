@@ -28,11 +28,12 @@ const SLIDERS: [SliderKey, number, number, number][] = [
 
 export async function renderEditor(root: HTMLElement, shotId: string): Promise<void> {
   root.replaceChildren(h("p", { class: "loading" }, t().loadingShot));
-  const [meta, saved, pixels, geo] = await Promise.all([
+  const [meta, saved, pixels, geo, look] = await Promise.all([
     api.meta(shotId),
     api.edits(shotId),
     api.preview(shotId),
     api.geometry(shotId),
+    api.look("l16").catch(() => null),
   ]);
   let edits: Edits = { ...DEFAULT_EDITS, ...saved };
   if (edits.source === "fused" && !meta.fusion) edits = { ...edits, source: "single" };
@@ -44,6 +45,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
   const canvas = h("canvas", { class: "view" });
   const renderer = new Renderer(canvas);
   renderer.setImage(firstPixels, meta.preview.width, meta.preview.height);
+  if (look) renderer.setLook(look);
   renderer.setRotation(edits.rotate);
   const displayWidth = () => (edits.rotate % 180 ? meta.full.height : meta.full.width);
 
@@ -319,6 +321,27 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
       t().sourceFused(fu ? fusedModules(fu.modules, meta.reference_camera).join("+") : "A"),
     ),
   ];
+  // Vzhled: tónová křivka + HueSatMap nafitované na JPEG z foťáku, nebo lineární sRGB.
+  const lookBtn = (v: Edits["look"], label: string, title: string) => {
+    const b = h(
+      "button",
+      { "aria-pressed": String(edits.look === v), title, disabled: v === "l16" && !look },
+      label,
+    );
+    b.addEventListener("click", () => {
+      if (edits.look === v) return;
+      edits = { ...edits, look: v };
+      for (const x of lookBtns) x.setAttribute("aria-pressed", String(x === b));
+      draw();
+      saveSoon();
+    });
+    return b;
+  };
+  const lookBtns = [
+    lookBtn("l16", t().lookL16, t().lookL16Hint),
+    lookBtn("none", t().lookNone, t().lookNoneHint),
+  ];
+
   // Detail z B modulů (52 Mpx): stav / spuštění výpočtu.
   function hiresUi(): HTMLElement {
     if (meta.hires) return h("p", { class: "hint" }, t().hiresReady(meta.hires.detail_pct));
@@ -421,6 +444,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
     sourceSection,
     geometrySection,
     h("h2", {}, t().tone),
+    h("div", { class: "seg", "aria-label": t().look }, ...lookBtns),
     ...sliders,
     h("div", { class: "row" }, compare, resetAll),
     h("h2", {}, t().dof),
@@ -639,9 +663,12 @@ function fusedModules(m: string[] | Record<string, unknown>, ref: string): strin
   return Array.isArray(m) ? m : [ref, ...Object.keys(m)];
 }
 
-/** Úpravy mimo tón (geometrie, zdroj obrazu), které Reset ani porovnání Před / po nevrací. */
-function geometry(e: Edits): Pick<Edits, "flip_h" | "flip_v" | "source" | "rotate" | "straighten"> {
+/** Úpravy mimo slidery (geometrie, zdroj, vzhled), které Reset ani porovnání Před / po nevrací. */
+function geometry(
+  e: Edits,
+): Pick<Edits, "flip_h" | "flip_v" | "source" | "rotate" | "straighten" | "look"> {
   return {
+    look: e.look,
     flip_h: e.flip_h,
     flip_v: e.flip_v,
     source: e.source,

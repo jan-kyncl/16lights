@@ -52,7 +52,7 @@ def update(jobs_dir: Path, job: dict[str, Any], **fields: Any) -> dict[str, Any]
 
 def claim_next(jobs_dir: Path) -> dict[str, Any] | None:
     """Nejstarší čekající úloha, kterou se podaří zamknout."""
-    candidates = []
+    candidates: list[dict[str, Any]] = []
     for p in jobs_dir.glob("*.json"):
         try:
             job = json.loads(p.read_text())

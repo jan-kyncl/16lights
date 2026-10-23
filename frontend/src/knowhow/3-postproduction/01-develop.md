@@ -54,12 +54,14 @@ Computed once per shot (`tone.color_params`), stored in `meta.color`:
 ```
 v   = cam · 2^EV · gains                        1. exposure + WB (no clip, see develop step 6)
 v   = max(CCM(gains) · v, 0)                    2. camera RGB → linear sRGB
+v   = PP⁻¹ · HueSatMap(PP · v)                     look (if on), PP = lin. sRGB → lin. ProPhoto
 y   = lum(v)^(1/2.2)                            3. highlights / shadows
 ev  = H · smoothstep(0.45, 1, y) + S · (1 − smoothstep(0, 0.45, y))
 v  *= 2^ev
 k   = 1 + 0.6 · C                               4. contrast around middle grey (on luminance)
 v  *= 0.18 · (lum/0.18)^k / lum
 v   = max(lum + (v − lum)(1 + Sat), 0)          5. saturation
+v   = PP⁻¹ · RGBTone(curve, PP · v)                look tone curve (if on)
 out = sRGB_OETF(v)                              6. encode
 ```
 
@@ -70,6 +72,28 @@ out = sRGB_OETF(v)                              6. encode
   flattened the fusion's HDR range and the vignetting-lifted corners, and left coloured rims at the
   clip edge. Blown areas are made neutral in the data (develop step 6), values above 1.0 stay, so the
   _Highlights_ slider can pull them back.
+
+### Look (`edits.look`)
+
+`"l16"` (default for new shots) = the camera's own JPEG rendering, fitted on our data; `"none"` =
+plain scene-linear sRGB (flat, for your own grading). Stored as `backend/l16core/looks/l16.json`,
+served to the preview by `GET /api/looks/l16`, structured exactly like a DNG camera profile:
+
+- **HueSatMap** 36 hues × 8 saturations (× 1 value) in linear ProPhoto, HSV as in the DNG SDK
+  (`v = max`, `s = (max − min)/max`): hue shift in degrees, saturation and value multipliers,
+  bilinear over hue (cyclic) and saturation. The `s = 0` row is identity, so neutrals stay neutral.
+  It only scales brightness, so it commutes with exposure.
+- **Tone curve**, 25 knots at `u = i/24` on `x = u^2.2`, applied like the DNG SDK's
+  `RefBaselineRGBTone`: max and min channel go through the curve, the middle one keeps its ratio
+  (hue does not flip). It sits after the sliders, so Highlights / Shadows / Contrast act on scene
+  values and the curve rolls them off.
+- **Fit** (`tools/look/`): 171 RAW ↔ camera JPEG pairs from the backup, our reference-module develop
+  with `edits = 0` registered onto the JPEG (SIFT homography), torch fit of curve + table + a free
+  exposure per shot, 20 % of the shots held out. 8-bit MAE on held-out shots: 7.0 with the curve
+  only, 6.3 with the HueSatMap (sRGB OETF alone: ~10 even with a fitted exposure). The camera
+  brightens night shots by ~+0.9 EV on top (auto exposure, not part of the look).
+- Edits saved before the look existed load as `"none"`: their exposure was tuned for linear tone.
+- Shader ↔ `tone.py` parity with the look on: max 1/255 (headless Chrome readback, 2026-10-23).
 
 **Parity check:** a WebGL screenshot against the server export with all sliders moved gives a max
 difference of 1.7/255 (`docs/progress/M2`).
@@ -104,8 +128,14 @@ multi-camera noise reduction already baked in.
   `CalibrationIlluminant1/2` = 17 / 21, `AsShotNeutral` = 1/gains (with temperature / tint). The raw
   developer interpolates the matrices by the neutral exactly like the app. Shots without stored
   profiles fall back to one pair at D50 derived from the CCM.
+- Look on: `ProfileHueSatMapDims/Data1/Data2` + `ProfileToneCurve` (129 points, dense because the
+  DNG SDK fits a cubic spline through them), `ProfileName` "L16 Look". The same tables in the same
+  space (linear ProPhoto behind the ForwardMatrix), so Adobe Camera Raw / Lightroom render the look.
+  `ProfileEmbedPolicy` = 3 (the tag 50941 was mislabelled `ColorimetricReference` before).
 - Verified by decoding with macOS Core Image RAW (`sips`): colours, white balance and orientation match
-  the JPEG export.
+  the JPEG export; with `boostAmount = 0` the linear DNG matches our linear export (MAE 3.6/255).
+  **Core Image ignores the profile tags** (HueSatMap, tone curve) and applies Apple's own curve
+  instead, so the look in the DNG is only visible in Adobe-compatible developers.
 
 ## Focus peaking (view only)
 

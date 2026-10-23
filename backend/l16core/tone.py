@@ -6,8 +6,12 @@ export na serveru renderuje stejné úpravy jako živý náhled v prohlížeči.
 
 from __future__ import annotations
 
+import json
 import math
+import re
 from dataclasses import asdict, dataclass, field, fields
+from functools import cache
+from pathlib import Path
 from typing import Any
 
 import cv2
@@ -29,6 +33,21 @@ XYZ_D50_TO_SRGB = np.array(
     ],
     dtype=np.float32,
 )
+
+# XYZ D50 → lineární ProPhoto (ROMM RGB): prostor HueSatMap a tónové křivky v DNG.
+XYZ_D50_TO_PROPHOTO = np.array(
+    [
+        [1.3459433, -0.2556075, -0.0511118],
+        [-0.5445989, 1.5081673, 0.0205351],
+        [0.0, 0.0, 1.2118128],
+    ],
+    dtype=np.float64,
+)
+SRGB_TO_PROPHOTO = (XYZ_D50_TO_PROPHOTO @ np.linalg.inv(XYZ_D50_TO_SRGB.astype(np.float64))).astype(
+    np.float32
+)
+PROPHOTO_TO_SRGB = np.linalg.inv(SRGB_TO_PROPHOTO.astype(np.float64)).astype(np.float32)
+LOOKS_DIR = Path(__file__).parent / "looks"
 
 
 # Interpolují se jen profily A a D65 jako v Lumenu (lux) a v DNG se dvěma iluminanty; F11
@@ -87,6 +106,7 @@ class Edits:
     flip_v: bool = False  # zrcadlení svisle
     rotate: int = 0  # otočení po směru hodin: 0 / 90 / 180 / 270 (oprava chybné orientace z IMU)
     straighten: float = 0.0  # vyrovnání horizontu ve stupních (+ = po směru hodin), s ořezem rohů
+    look: str = "l16"  # "l16" = vzhled JPEG z foťáku (looks/l16.json), "none" = lineární sRGB
     # "fused" = fúze A modulů (M3 krok 3; bez fúze se použije modul), "single" = jeden modul
     source: str = "fused"
 
@@ -224,6 +244,104 @@ def nearest_illuminant(profiles: list[dict[str, Any]], cct: float | None) -> str
     return str(min(profiles, key=lambda p: abs(1.0 / p["temp"] - 1.0 / cct))["name"])
 
 
+@dataclass(frozen=True, slots=True)
+class Look:
+    """Vzhled jako v DNG profilu: HueSatMap (odstín × sytost → posun odstínu [°], násobek
+    sytosti a jasu) a tónová křivka, obojí v lineárním ProPhoto. Křivka je zadaná hodnotami
+    v uzlech u = i/(n−1) na ose x = u^2.2 (hustší ve stínech)."""
+
+    name: str
+    table: NDArray[np.float32]  # (hue, sat, 3); hue i ↔ 360°·i/hue, sat j ↔ j/(sat−1)
+    curve: NDArray[np.float32]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "hue_divisions": int(self.table.shape[0]),
+            "sat_divisions": int(self.table.shape[1]),
+            "table": [round(float(v), 5) for v in self.table.reshape(-1)],
+            "curve": [round(float(v), 6) for v in self.curve],
+        }
+
+
+@cache
+def load_look(name: str) -> Look | None:
+    if name == "none" or not re.fullmatch(r"[a-z0-9_]{1,32}", name):
+        return None
+    path = LOOKS_DIR / f"{name}.json"
+    if not path.is_file():
+        return None
+    d = json.loads(path.read_text())
+    table = np.asarray(d["table"], dtype=np.float32).reshape(
+        d["hue_divisions"], d["sat_divisions"], 3
+    )
+    return Look(name=name, table=table, curve=np.asarray(d["curve"], dtype=np.float32))
+
+
+def rgb_to_hsv(x: F32) -> tuple[F32, F32, F32]:
+    """HSV jako DNG SDK: h ∈ [0, 6), s = (max − min)/max, v = max."""
+    r, g, b = x[..., 0], x[..., 1], x[..., 2]
+    mx, mn = x.max(axis=-1), x.min(axis=-1)
+    d = np.maximum(mx - mn, 1e-12)
+    h = np.where(mx == r, (g - b) / d, np.where(mx == g, 2.0 + (b - r) / d, 4.0 + (r - g) / d))
+    h = np.mod(h, 6.0)
+    s = np.where(mx > 1e-12, (mx - mn) / np.maximum(mx, 1e-12), 0.0)
+    return h.astype(np.float32), s.astype(np.float32), mx.astype(np.float32)
+
+
+def hsv_to_rgb(h: F32, s: F32, v: F32) -> F32:
+    h = np.mod(h, 6.0)
+    i = np.floor(h)
+    f = h - i
+    p, q, t = v * (1 - s), v * (1 - s * f), v * (1 - s * (1 - f))
+    sel = [i == k for k in range(5)]
+    r = np.select(sel, [v, q, p, p, t], v)
+    g = np.select(sel, [t, v, v, q, p], p)
+    b = np.select(sel, [p, p, t, v, v], q)
+    return np.stack([r, g, b], axis=-1).astype(np.float32)
+
+
+def apply_hue_sat_map(pp: F32, table: NDArray[np.float32]) -> F32:
+    """HueSatMap (1 dělení jasu) bilineárně přes odstín (cyklicky) a sytost (DNG SDK)."""
+    nh, ns = table.shape[:2]
+    h, s, v = rgb_to_hsv(pp)
+    hf = h * (nh / 6.0)
+    h0 = np.floor(hf)
+    fh = (hf - h0)[..., None]
+    i0 = h0.astype(np.int32) % nh
+    i1 = (i0 + 1) % nh
+    sf = np.clip(s * (ns - 1), 0.0, ns - 1 - 1e-6)
+    s0 = np.floor(sf)
+    fs = (sf - s0)[..., None]
+    j0 = s0.astype(np.int32)
+    j1 = j0 + 1
+    t = (table[i0, j0] * (1 - fs) + table[i0, j1] * fs) * (1 - fh) + (
+        table[i1, j0] * (1 - fs) + table[i1, j1] * fs
+    ) * fh
+    return hsv_to_rgb(
+        h + t[..., 0] * np.float32(6.0 / 360.0), np.clip(s * t[..., 1], 0.0, 1.0), v * t[..., 2]
+    )
+
+
+def eval_curve(x: F32, curve: NDArray[np.float32]) -> F32:
+    n = len(curve)
+    u = np.power(np.clip(x, 0.0, 1.0), 1.0 / 2.2) * (n - 1)
+    i = np.clip(np.floor(u), 0, n - 2).astype(np.int32)
+    f = u - i
+    return (curve[i] * (1 - f) + curve[i + 1] * f).astype(np.float32)
+
+
+def apply_rgb_tone(pp: F32, curve: NDArray[np.float32]) -> F32:
+    """Tónová křivka jako DNG SDK (RefBaselineRGBTone): přes křivku jde nejvyšší a nejnižší
+    kanál, prostřední se dopočítá ve stejném poměru, takže odstín zůstane."""
+    x = np.clip(pp, 0.0, 1.0)
+    lo, hi = x.min(axis=-1), x.max(axis=-1)
+    lo2, hi2 = eval_curve(lo, curve), eval_curve(hi, curve)
+    k = ((hi2 - lo2) / np.maximum(hi - lo, 1e-9))[..., None]
+    out: F32 = (lo2[..., None] + (x - lo[..., None]) * k).astype(np.float32)
+    return out
+
+
 def wb_gains(color: ColorParams, edits: Edits) -> NDArray[np.float32]:
     mult = np.array(
         [
@@ -257,6 +375,11 @@ def apply_tone(cam_rgb: F32, color: ColorParams, edits: Edits, *, encode: bool =
 
     ccm, _ = ccm_for(color, gains)
     v = np.maximum(v @ ccm.T, 0.0)
+    look = load_look(edits.look)
+    # HueSatMap nezávisí na expozici (jen násobí jas), pořadí vůči ní tedy nehraje roli
+    if look is not None:
+        pp = apply_hue_sat_map(v @ SRGB_TO_PROPHOTO.T, look.table)
+        v = np.maximum(pp @ PROPHOTO_TO_SRGB.T, 0.0)
 
     lum = v @ LUMA
     y = np.power(np.maximum(lum, 0.0), 1.0 / 2.2)
@@ -272,6 +395,8 @@ def apply_tone(cam_rgb: F32, color: ColorParams, edits: Edits, *, encode: bool =
 
     lum = (v @ LUMA)[..., None]
     v = np.maximum(lum + (v - lum) * (1.0 + edits.saturation), 0.0)
+    if look is not None:
+        v = np.maximum(apply_rgb_tone(v @ SRGB_TO_PROPHOTO.T, look.curve) @ PROPHOTO_TO_SRGB.T, 0)
     return srgb_oetf(v) if encode else v.astype(np.float32)
 
 

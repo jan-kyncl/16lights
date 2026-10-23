@@ -13,12 +13,70 @@ uniform float uHighlights;
 uniform float uShadows;
 uniform float uContrast;
 uniform float uSaturation;
+// Vzhled (tone.py::Look): HueSatMap jako RGBA32F (x = odstín, y = sytost) a tónová křivka
+uniform bool uLookOn;
+uniform highp sampler2D uLookTable;
+uniform float uLookCurve[64];
+uniform int uLookN;
 // Focus peaking: jen překryv náhledu, v tone.py ani v exportu není.
 uniform float uPeaking;    // 0 = vypnuto, jinak práh gradientu
 uniform float uPeakStep;   // krok vzorkování v texelech (≈ texely na pixel obrazovky)
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const float MIDDLE_GREY = 0.18;
+
+// lin. sRGB ↔ lin. ProPhoto (tone.py SRGB_TO_PROPHOTO), po sloupcích
+const mat3 SRGB_TO_PP = mat3(0.5293459, 0.0983743, 0.0168832, 0.3300728, 0.8734610, 0.1176725,
+                             0.1405813, 0.0281647, 0.8654444);
+const mat3 PP_TO_SRGB = mat3(2.0340757, -0.2288131, -0.0085698, -0.7273342, 1.2317301, -0.1532866,
+                             -0.3067417, -0.0029169, 1.1618563);
+
+vec3 lookTab(int i, int j) { return texelFetch(uLookTable, ivec2(i, j), 0).rgb; }
+
+// HSV jako DNG SDK (h ∈ [0, 6), s = (max − min)/max, v = max), bilineárně přes odstín a sytost.
+vec3 hueSatMap(vec3 c) {
+  ivec2 n = textureSize(uLookTable, 0);
+  float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
+  if (mx <= 1e-12) return c;
+  float d = max(mx - mn, 1e-12);
+  float h = mx == c.r ? (c.g - c.b) / d : (mx == c.g ? 2.0 + (c.b - c.r) / d : 4.0 + (c.r - c.g) / d);
+  h = mod(h, 6.0);
+  float s = (mx - mn) / mx;
+  float hf = h * float(n.x) / 6.0;
+  float h0 = floor(hf), fh = hf - h0;
+  int i0 = int(h0) % n.x, i1 = (i0 + 1) % n.x;
+  float sf = clamp(s * float(n.y - 1), 0.0, float(n.y - 1) - 1e-6);
+  float s0 = floor(sf), fs = sf - s0;
+  int j0 = int(s0);
+  vec3 t = mix(mix(lookTab(i0, j0), lookTab(i0, j0 + 1), fs),
+               mix(lookTab(i1, j0), lookTab(i1, j0 + 1), fs), fh);
+  h = mod(h + t.x * (6.0 / 360.0), 6.0);
+  s = clamp(s * t.y, 0.0, 1.0);
+  float v = mx * t.z;
+  float sec = floor(h), f = h - sec;
+  float p = v * (1.0 - s), q = v * (1.0 - s * f), u = v * (1.0 - s * (1.0 - f));
+  if (sec == 0.0) return vec3(v, u, p);
+  if (sec == 1.0) return vec3(q, v, p);
+  if (sec == 2.0) return vec3(p, v, u);
+  if (sec == 3.0) return vec3(p, q, v);
+  if (sec == 4.0) return vec3(u, p, v);
+  return vec3(v, p, q);
+}
+
+// uzly křivky u = i/(n−1) na ose x = u^2.2
+float lookCurve(float x) {
+  float u = pow(clamp(x, 0.0, 1.0), 1.0 / 2.2) * float(uLookN - 1);
+  int i = clamp(int(floor(u)), 0, uLookN - 2);
+  return mix(uLookCurve[i], uLookCurve[i + 1], u - float(i));
+}
+
+// DNG SDK RefBaselineRGBTone: přes křivku nejvyšší a nejnižší kanál, prostřední v poměru.
+vec3 rgbTone(vec3 c) {
+  c = clamp(c, 0.0, 1.0);
+  float lo = min(c.r, min(c.g, c.b)), hi = max(c.r, max(c.g, c.b));
+  float lo2 = lookCurve(lo), hi2 = lookCurve(hi);
+  return vec3(lo2) + (c - vec3(lo)) * ((hi2 - lo2) / max(hi - lo, 1e-9));
+}
 
 vec3 srgbOetf(vec3 v) {
   v = clamp(v, 0.0, 1.0);
@@ -52,6 +110,7 @@ vec3 tone(vec3 cam) {
 
   // 3. CCM
   v = max(uCcm * v, 0.0);
+  if (uLookOn) v = max(PP_TO_SRGB * hueSatMap(SRGB_TO_PP * v), 0.0);
 
   // 4. světla / stíny (EV podle percepčního jasu)
   float lum = dot(v, LUMA);
@@ -68,8 +127,9 @@ vec3 tone(vec3 cam) {
   // 6. saturace
   lum = dot(v, LUMA);
   v = max(vec3(lum) + (v - vec3(lum)) * (1.0 + uSaturation), 0.0);
+  if (uLookOn) v = max(PP_TO_SRGB * rgbTone(SRGB_TO_PP * v), 0.0);
 
-  // 7. sRGB OETF
+  // 7. tónová křivka vzhledu (výše), sRGB OETF
   return srgbOetf(v);
 }
 

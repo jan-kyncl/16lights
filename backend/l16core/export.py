@@ -20,8 +20,11 @@ from l16core.tone import (
     XYZ_D50_TO_SRGB,
     ColorParams,
     Edits,
+    Look,
     apply_flip,
     apply_tone,
+    eval_curve,
+    load_look,
     to_uint8,
     to_uint16,
     wb_gains,
@@ -130,6 +133,29 @@ def dng_color(color: ColorParams, edits: Edits) -> dict[str, Any]:
     return {"pairs": [(D50, cm, fm)], "neutral": neutral}
 
 
+def dng_look_tags(look: Look) -> list[tuple[int, int, int, Any, bool]]:
+    """Vzhled jako DNG profil: HueSatMap (stejná pro oba iluminanty) a ProfileToneCurve.
+
+    Naše HueSatMap i křivka žijí ve stejném prostoru jako v DNG (lineární ProPhoto za
+    ForwardMatrix), raw konvertor je tedy použije přímo. DNG SDK prokládá křivku kubickým
+    splinem, proto se zapisuje hustě (lineární interpolace v u = x^(1/2.2) jako `eval_curve`).
+    """
+    nh, ns = look.table.shape[:2]
+    # pořadí v DNG: jas (1) → odstín → sytost, po třech floatech
+    hsm = [float(v) for v in look.table.reshape(-1)]
+    u = np.linspace(0.0, 1.0, 129, dtype=np.float32)
+    x = u**2.2
+    y = eval_curve(x, look.curve)
+    curve = [float(v) for xy in zip(x, y, strict=True) for v in xy]
+    return [
+        (50936, 2, 0, "L16 Look", True),  # ProfileName
+        (50937, 4, 3, (nh, ns, 1), True),  # ProfileHueSatMapDims
+        (50938, 11, len(hsm), hsm, True),  # ProfileHueSatMapData1
+        (50939, 11, len(hsm), hsm, True),  # ProfileHueSatMapData2
+        (50940, 11, len(curve), curve, True),  # ProfileToneCurve
+    ]
+
+
 def write_dng(
     out: io.BytesIO, rgb: np.ndarray, color: ColorParams, edits: Edits, meta: dict[str, Any]
 ) -> None:
@@ -155,8 +181,13 @@ def write_dng(
         (50731, 5, 1, (1, 1), True),  # BaselineNoise
         (50732, 5, 1, (1, 1), True),  # BaselineSharpness
         (50739, 5, 1, (1, 1), True),  # ShadowScale
-        (50941, 4, 1, 1, True),  # ColorimetricReference: výstup relativní (scéna)
+        # Dřív tu byl tag 50941 popsaný jako ColorimetricReference (to je 50879, výchozí 0 =
+        # scéna); 50941 je ProfileEmbedPolicy, profil je náš vlastní, bez omezení.
+        (50941, 4, 1, 3, True),  # ProfileEmbedPolicy
     ]
+    look = load_look(edits.look)
+    if look is not None:
+        tags += dng_look_tags(look)
     # ColorMatrix1/2, CalibrationIlluminant1/2, ForwardMatrix1/2
     for (illum, cm, fm), (t_cm, t_il, t_fm) in zip(
         mats["pairs"], ((50721, 50778, 50964), (50722, 50779, 50965)), strict=False

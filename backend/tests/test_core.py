@@ -70,7 +70,7 @@ def test_process_creates_cache(synth_lri: Path, tmp_path: Path) -> None:
     assert full.shape == (synth.H, synth.W, 3)
     # Po WB a CCM (≈ identita) má červený blok vyjít červeně; NORMAL = raw orientace,
     # blok tedy zůstane vlevo nahoře.
-    lin = apply_tone(full, color, Edits(), encode=False)
+    lin = apply_tone(full, color, Edits(look="none"), encode=False)
     r, g, b = lin[3, 3]
     assert r > 0.5 and g < 0.1 and b < 0.1
     # Šedý gradient zůstane neutrální.
@@ -120,17 +120,49 @@ def test_tone_exposure_and_neutrality() -> None:
     np.testing.assert_allclose(apply_tone(grey, color, Edits(contrast=1.0)), base, atol=1e-4)
 
 
+def test_look_keeps_neutrals_and_hue_order() -> None:
+    from l16core.tone import (
+        apply_hue_sat_map,
+        apply_rgb_tone,
+        hsv_to_rgb,
+        load_look,
+        rgb_to_hsv,
+    )
+
+    look = load_look("l16")
+    assert look is not None and load_look("none") is None and load_look("missing") is None
+    assert load_look("../looks/l16") is None
+    rng = np.random.default_rng(1)
+    px = rng.uniform(0.0, 1.0, (500, 3)).astype(np.float32)
+    np.testing.assert_allclose(hsv_to_rgb(*rgb_to_hsv(px)), px, atol=1e-5)
+    # šedá zůstane šedou a její jas nastaví jen křivka
+    grey = np.linspace(0.0, 1.0, 50, dtype=np.float32)[:, None].repeat(3, 1)
+    np.testing.assert_allclose(apply_hue_sat_map(grey, look.table), grey, atol=1e-6)
+    toned = apply_rgb_tone(grey, look.curve)
+    assert np.allclose(toned, toned[:, :1], atol=1e-6) and np.all(np.diff(toned[:, 0]) >= 0)
+    # RGB tone zachová pořadí kanálů (odstín se nepřeklopí)
+    out = apply_rgb_tone(px, look.curve)
+    assert np.array_equal(np.argsort(out, axis=1)[:, [0, 2]], np.argsort(px, axis=1)[:, [0, 2]])
+    color = ColorParams(wb=(1.0, 1.0, 1.0), ccm=tuple(np.eye(3).reshape(-1)), illuminant=None)
+    img = px.reshape(20, 25, 3) * 0.3
+    assert not np.allclose(
+        apply_tone(img, color, Edits(look="none")), apply_tone(img, color, Edits())
+    )
+
+
 def test_recover_highlights_to_neutral() -> None:
     from l16core.develop import recover_highlights
 
     wb = (2.0, 1.0, 1.6)
     # G saturovaný (při zisku vinětace 2 je saturace na 2.0), R a B pod saturací
-    rgb = np.array([[[0.6, 2.0, 0.9], [0.2, 0.5, 0.3]]], dtype=np.float32)
-    gain = np.full((1, 2), 2.0, dtype=np.float32)
+    # (mapa saturace se roztahuje o poloměr, „daleký“ pixel je proto o 20 px dál)
+    rgb = np.tile(np.array([0.2, 0.5, 0.3], dtype=np.float32), (1, 24, 1))
+    rgb[0, 0] = (0.6, 2.0, 0.9)
+    gain = np.full((1, 24), 2.0, dtype=np.float32)
     out = recover_highlights(rgb, gain, wb)
     u = out[0, 0] * np.asarray(wb)
     assert np.allclose(u, u.max())  # po WB neutrální, jas z nejvyššího kanálu
-    np.testing.assert_array_equal(out[0, 1], rgb[0, 1])  # daleko od saturace beze změny
+    np.testing.assert_array_equal(out[0, 20], rgb[0, 20])  # daleko od saturace beze změny
 
 
 def test_ccm_interpolation_by_cct() -> None:
@@ -191,3 +223,11 @@ def test_refocus_blurs_only_out_of_focus() -> None:
     assert out[:, right].std() < 0.6 * rgb[:, right].std()
     # bez rozdílu hloubek se nic nemění
     np.testing.assert_allclose(refocus(rgb, np.ones((h, w), np.float32), 1.0, 50.0), rgb, atol=1e-5)
+
+
+def test_edits_saved_before_look_stay_linear(tmp_path: Path) -> None:
+    assert shot.load_edits(tmp_path).look == "l16"  # nový snímek
+    (tmp_path / "edits.json").write_text(json.dumps({"exposure": 1.0}))
+    assert shot.load_edits(tmp_path).look == "none"
+    shot.save_edits(tmp_path, Edits(look="l16"))
+    assert shot.load_edits(tmp_path).look == "l16"

@@ -1,5 +1,5 @@
 import toneFrag from "./shaders/tone.frag?raw";
-import type { ColorParams, Edits } from "./api";
+import type { ColorParams, Edits, Look } from "./api";
 import { ccmFor } from "./color";
 import { t } from "./i18n";
 
@@ -36,6 +36,10 @@ const UNIFORMS = [
   "uShadows",
   "uContrast",
   "uSaturation",
+  "uLookOn",
+  "uLookTable",
+  "uLookCurve",
+  "uLookN",
   "uFlip",
   "uRot",
   "uStraighten",
@@ -155,6 +159,9 @@ export class Renderer {
   private texWidth = 1;
   private texSize: [number, number] = [1, 1];
   private rot = 0;
+  private lookTex: WebGLTexture | null = null;
+  private lookCurve: Float32Array | null = null;
+  private lookN = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -233,6 +240,30 @@ export class Renderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
 
+  /** Tabulky vzhledu; RGBA32F se čte přes texelFetch (bez filtrování, shodně s tone.py). */
+  setLook(look: Look): void {
+    const gl = this.gl;
+    const nh = look.hue_divisions;
+    const ns = look.sat_divisions;
+    const data = new Float32Array(nh * ns * 4);
+    for (let i = 0; i < nh; i++) {
+      for (let j = 0; j < ns; j++) {
+        for (let c = 0; c < 3; c++)
+          data[(j * nh + i) * 4 + c] = look.table[(i * ns + j) * 3 + c] ?? 0;
+      }
+    }
+    if (this.lookTex) gl.deleteTexture(this.lookTex);
+    this.lookTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.lookTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, nh, ns, 0, gl.RGBA, gl.FLOAT, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    const curve = new Float32Array(64);
+    curve.set(look.curve.slice(0, 64));
+    this.lookCurve = curve;
+    this.lookN = Math.min(look.curve.length, 64);
+  }
+
   setDepthView(v: DepthView | null): void {
     this.depthView = v;
   }
@@ -275,6 +306,16 @@ export class Renderer {
     gl.uniform1f(this.loc.uShadows, e.shadows);
     gl.uniform1f(this.loc.uContrast, e.contrast);
     gl.uniform1f(this.loc.uSaturation, e.saturation);
+    const lookOn = e.look !== "none" && this.lookTex !== null && this.lookCurve !== null;
+    gl.uniform1i(this.loc.uLookOn, lookOn ? 1 : 0);
+    if (lookOn && this.lookCurve) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, this.lookTex);
+      gl.uniform1i(this.loc.uLookTable, 4);
+      gl.uniform1fv(this.loc.uLookCurve, this.lookCurve);
+      gl.uniform1i(this.loc.uLookN, this.lookN);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.uniform2f(this.loc.uFlip, e.flip_h ? 1 : 0, e.flip_v ? 1 : 0);
     gl.uniform1i(this.loc.uRot, ((e.rotate / 90) | 0) % 4);
     const aspect = this.canvas.width / this.canvas.height;

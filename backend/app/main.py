@@ -23,7 +23,7 @@ from app.config import get_settings
 from l16core import calibration, export, lelr, native, shot
 from l16core.develop import downscale
 from l16core.logs import setup_logging
-from l16core.tone import ColorParams, Edits, apply_tone, to_uint8
+from l16core.tone import ColorParams, Edits, apply_tone, load_look, to_uint8
 
 setup_logging()
 log = structlog.get_logger()
@@ -75,6 +75,15 @@ def queue_processing(shot_id: str, camera: str | None = None) -> dict[str, Any]:
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     return {"ok": True, "data_dir": str(settings.data_dir)}
+
+
+@app.get("/api/looks/{name}")
+def get_look(name: str) -> dict[str, Any]:
+    """Tabulky vzhledu pro shader (HueSatMap + tónová křivka), shodné s tone.load_look."""
+    look = load_look(name)
+    if look is None:
+        raise HTTPException(404, "unknown look")
+    return look.to_dict()
 
 
 @app.get("/api/devices")

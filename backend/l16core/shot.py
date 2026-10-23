@@ -730,7 +730,12 @@ def load_meta(shot_dir: Path) -> dict[str, Any]:
 
 def load_edits(shot_dir: Path) -> Edits:
     p = shot_dir / "edits.json"
-    return Edits.from_dict(json.loads(p.read_text())) if p.exists() else Edits()
+    if not p.exists():
+        return Edits()
+    d = json.loads(p.read_text())
+    # úpravy uložené před vzhledem L16 (2026-10-23) byly laděné na lineární tón
+    d.setdefault("look", "none")
+    return Edits.from_dict(d)
 
 
 def save_edits(shot_dir: Path, edits: Edits) -> None:

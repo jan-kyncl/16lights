@@ -28,10 +28,11 @@ are 3× faster. Ordered by impact:
          dilated; tone clip at 1.0 removed (fusion HDR above 1.0 now reaches the Highlights slider)
    - [ ] Fusion saturation test still assumes 1.0 (`fusion.SATURATION`, also `gpu_ops`): compare
          against the vignetting gain map of each module (corners are lifted up to 3.8×)
-   - [ ] **L16 look** (own HueSatMap + tone curve) fitted from camera JPEG ↔ RAW pairs (hundreds in the
-         backup). Camera JPEG and lux both render ~10–20 % warmer R/G and more saturated warm hues than our
-         colorimetric output; lux carries Lumen's DCP tables (HueSatMap 32×32 + ProfileToneCurve),
-         which we do not copy (Lumen data, GPL project). Optional "Camera look" in the editor + DCP in the DNG
+   - [x] **L16 look**: own HueSatMap (36×8) + tone curve fitted on 171 camera JPEG ↔ RAW pairs
+         (`tools/look/`, held-out 8-bit MAE 6.3), default in the editor (L16 camera / Linear), embedded
+         as a DNG profile. Not verified in Adobe software yet (Core Image ignores profile tags)
+   - [ ] Auto exposure like the camera: the fit needs ~+0.9 EV on night shots and ±0.26 EV on daylight
+         shots to match the camera JPEG. Predict it from metadata / histogram (see "exposure from metadata")
    - [ ] ForwardMatrix refit on a ColorChecker shot
    - [ ] 52 MP at night: B-module detail ghosts (doubled edges) on dark scenes
 6. [ ] **70 / 150 mm modes** (19 shots in the backup): B4 reference, C modules as detail

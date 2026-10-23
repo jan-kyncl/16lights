@@ -97,6 +97,15 @@ def test_upload_process_edit_export(synth_lri: Path, data_dir: Path) -> None:
         page = dng.pages[0]
         assert page.photometric == 34892 and page.dtype == np.uint16  # LinearRaw
         assert 50706 in page.tags  # DNGVersion
+        assert page.tags[50937].value == (36, 8, 1)  # ProfileHueSatMapDims (L16 look)
+    r = client.post(
+        f"/api/shots/{shot_id}/export", json={"format": "dng", "edits": {"look": "none"}}
+    )
+    with tifffile.TiffFile(io.BytesIO(r.content)) as dng:
+        assert 50937 not in dng.pages[0].tags
+    look = client.get("/api/looks/l16").json()
+    assert len(look["table"]) == look["hue_divisions"] * look["sat_divisions"] * 3
+    assert client.get("/api/looks/nope").status_code == 404
 
     # opakovaný upload stejného souboru nic nepřepočítává
     with synth_lri.open("rb") as fh:

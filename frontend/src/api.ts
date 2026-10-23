@@ -35,6 +35,16 @@ export interface Edits {
   source: "single" | "fused";
   rotate: 0 | 90 | 180 | 270;
   straighten: number; // stupně, + = po směru hodin
+  look: "l16" | "none"; // vzhled JPEG z foťáku, nebo lineární sRGB
+}
+
+/** Vzhled (tone.py::Look): HueSatMap v lin. ProPhoto + tónová křivka. */
+export interface Look {
+  name: string;
+  hue_divisions: number;
+  sat_divisions: number;
+  table: number[]; // (odstín, sytost, 3): posun odstínu [°], násobek sytosti, násobek jasu
+  curve: number[];
 }
 
 export const DEFAULT_EDITS: Edits = {
@@ -52,6 +62,7 @@ export const DEFAULT_EDITS: Edits = {
   source: "fused",
   rotate: 0,
   straighten: 0,
+  look: "l16",
 };
 
 export interface CameraInfo {
@@ -177,6 +188,7 @@ async function json<T>(res: Response): Promise<T> {
 export const api = {
   listShots: () => fetch(`${BASE}/shots`).then((r) => json<ShotSummary[]>(r)),
   meta: (id: string) => fetch(`${BASE}/shots/${id}/meta`).then((r) => json<ShotMeta>(r)),
+  look: (name: string) => fetch(`${BASE}/looks/${name}`).then((r) => json<Look>(r)),
   edits: (id: string) => fetch(`${BASE}/shots/${id}/edits`).then((r) => json<Edits>(r)),
   job: (id: string) => fetch(`${BASE}/jobs/${id}`).then((r) => json<Job>(r)),
   thumbUrl: (id: string) => `${BASE}/shots/${id}/thumb`,

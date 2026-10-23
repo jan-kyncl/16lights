@@ -52,9 +52,7 @@ def vignetting_gain(vig: NDArray[np.float32] | None, shape: tuple[int, int]) -> 
     return gain
 
 
-def recover_highlights(
-    rgb: F32, gain: F32, wb: tuple[float, float, float], radius: int = 3
-) -> F32:
+def recover_highlights(rgb: F32, gain: F32, wb: tuple[float, float, float], radius: int = 3) -> F32:
     """Přepal do neutrální: blízko saturace kteréhokoli kanálu se barva (po WB) stáhne k nejvyšší
     hodnotě kanálů. Nahrazuje tvrdý ořez v tónování, který nevěděl o vinětaci (saturace je
     rgb = g, ne 1.0) a nechával na okraji přepalu barevné lemy.
@@ -66,7 +64,9 @@ def recover_highlights(
     if float(frac.max()) < CLIP_START:
         return rgb
     k = 2 * radius + 1
-    frac = cv2.dilate(frac, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    frac = np.asarray(
+        cv2.dilate(frac, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))), dtype=np.float32
+    )
     t = np.clip((frac - CLIP_START) / (CLIP_FULL - CLIP_START), 0.0, 1.0)
     w = cv2.GaussianBlur(t * t * (3.0 - 2.0 * t), (k, k), 0)[..., None]
     wbv = np.asarray(wb, dtype=np.float32)
