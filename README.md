@@ -115,6 +115,10 @@ npm run build && npm run format:check
 are two implementations of the same computation, so change both together. **Restart the native
 service after every backend change** (version check).
 
+Side-by-side comparison of the processing variants with the camera JPEG and lux (aligned), as a
+static page in `data/compare/<date>/index.html` (keys 1–9 switch variants at the same zoom):
+`cd backend && uv run python ../tools/compare/gallery.py [L16_00259 …]`
+
 ### Releasing
 
 1. Bump the version in `backend/pyproject.toml`, `native/pyproject.toml` and `frontend/package.json`
