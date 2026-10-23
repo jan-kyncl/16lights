@@ -95,9 +95,13 @@ if __name__ == "__main__":
 @main.command()
 @click.argument("shots", type=click.Path(exists=True, file_okay=False, path_type=Path))
 def recolor(shots: Path) -> None:
-    """Přepočítá barevné parametry (meta.color) všech snímků v adresáři z jejich LRI."""
+    """Přepočítá barvy (meta.color), automatickou expozici a náhled všech snímků z jejich LRI."""
     from l16core import shot
 
     for d in sorted(p.parent for p in shots.glob("*/meta.json")):
         c = shot.refresh_color(d)
-        click.echo(f"{d.name[:12]}  {c.cct or 0:6.0f} K  {c.illuminant}")
+        a = shot.refresh_exposure(d)
+        click.echo(
+            f"{d.name[:12]}  {c.cct or 0:6.0f} K  {c.illuminant}  auto {a['ev']:+.2f} EV"
+            f"  (capture {a['capture_ratio_ev']})"
+        )

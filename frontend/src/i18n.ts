@@ -41,6 +41,9 @@ const en = {
   saturation: "Saturation",
   dblClickReset: "Double-click to reset",
   beforeAfter: "Before / after",
+  autoExposure: (ev: number) => `Auto ${ev >= 0 ? "+" : ""}${ev.toFixed(1)} EV`,
+  autoExposureHint:
+    "Exposure like the camera's own JPEG (from capture metadata and scene brightness)",
   beforeAfterHint: "Hold to show without edits (key \\)",
   reset: "Reset",
   resetHint: "Resets tone; flip is kept",
@@ -258,6 +261,8 @@ const cs: Dict = {
   saturation: "Saturace",
   dblClickReset: "Dvojklik vrátí výchozí",
   beforeAfter: "Před / po",
+  autoExposure: (ev) => `Auto ${ev >= 0 ? "+" : ""}${ev.toFixed(1)} EV`,
+  autoExposureHint: "Expozice jako JPEG z foťáku (z metadat snímku a jasu scény)",
   beforeAfterHint: "Podrž pro zobrazení bez úprav (klávesa \\)",
   reset: "Reset",
   resetHint: "Vrátí tón; zrcadlení zůstane",

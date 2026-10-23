@@ -13,8 +13,8 @@ are 3× faster. Ordered by impact:
        gain. lux merges per module, then across modules
 2. [x] **Chroma + luma denoise** after fusion (à trous wavelet, measured noise, texture floor). Noise now 25–70 % below lux on all measured shots, guided by luma and the noise model (chroma noise in
        shadows is the most visible gap)
-3. [ ] **Exposure from metadata** (Lumen adds the LRI ev offset, +3.2 EV at night) + local tone
-       mapping using the fusion's HDR range
+3. [ ] **Exposure from metadata** (done: auto exposure, see 5) + **local tone mapping** using the
+       fusion's HDR range
 4. [ ] **52 MP without artefacts, full frame**: reject misaligned B tiles (colour threads on
        backlit edges), B poses from `mirror_position`, sub-pixel super-resolution from the A modules
        where no B module reaches. Target 52–75 MP
@@ -31,8 +31,8 @@ are 3× faster. Ordered by impact:
    - [x] **L16 look**: own HueSatMap (36×8) + tone curve fitted on 171 camera JPEG ↔ RAW pairs
          (`tools/look/`, held-out 8-bit MAE 6.3), default in the editor (L16 camera / Linear), embedded
          as a DNG profile. Not verified in Adobe software yet (Core Image ignores profile tags)
-   - [ ] Auto exposure like the camera: the fit needs ~+0.9 EV on night shots and ±0.26 EV on daylight
-         shots to match the camera JPEG. Predict it from metadata / histogram (see "exposure from metadata")
+   - [x] Auto exposure like the camera: preview vs. module exposure from ViewPreferences + log-mean
+         luma, leave-one-out rms 0.22 EV (`l16core/exposure.py`), default for new shots, _Auto_ button
    - [ ] ForwardMatrix refit on a ColorChecker shot
    - [ ] 52 MP at night: B-module detail ghosts (doubled edges) on dark scenes
 6. [ ] **70 / 150 mm modes** (19 shots in the backup): B4 reference, C modules as detail

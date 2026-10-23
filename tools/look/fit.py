@@ -202,3 +202,7 @@ out = {
     **look,
 }
 Path(sys.argv[2]).write_text(json.dumps(out, indent=1) + "\n")
+# expozice snímků pro fit_exposure.py
+(Path(sys.argv[1]) / "exposures.json").write_text(
+    json.dumps({n: round(float(v), 4) for n, v in zip(names, e, strict=True)}, indent=1)
+)

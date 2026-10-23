@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 from mizukage._block import BlockType, iter_blocks
-from mizukage.proto import lightheader_pb2
+from mizukage.proto import lightheader_pb2, view_preferences_pb2
 
 MAGIC = b"LELR"
 
@@ -37,6 +37,35 @@ def iter_light_headers(data: bytes) -> Iterator[Any]:
         except Exception:
             continue
         yield lh
+
+
+def view_preferences(data: bytes) -> dict[str, Any]:
+    """ViewPreferences (samostatné bloky i pole 19 LightHeaderu), pozdější přepisují dřívější.
+
+    Expozice náhledu foťáku: `ev_offset` [EV], `image_gain`, `image_integration_time_ns`,
+    `qc_lux_index`, `display_gain`; mizukage z nich vystavuje jen WB a orientaci.
+    """
+    from google.protobuf.json_format import MessageToDict  # type: ignore[import-untyped]
+
+    out: dict[str, Any] = {}
+    for start, hdr in iter_blocks(data):
+        payload = data[start + hdr.msg_offset : start + hdr.msg_offset + hdr.msg_len]
+        try:
+            if hdr.msg_type == BlockType.VIEW_PREFERENCES:
+                vp = view_preferences_pb2.ViewPreferences()
+                vp.ParseFromString(payload)
+            elif hdr.msg_type == BlockType.LIGHT_HEADER:
+                lh = lightheader_pb2.LightHeader()
+                lh.ParseFromString(payload)
+                if not lh.HasField("view_preferences"):
+                    continue
+                vp = lh.view_preferences
+            else:
+                continue
+        except Exception:
+            continue
+        out.update(MessageToDict(vp, preserving_proto_field_name=True))
+    return out
 
 
 def _device_uid(lh: Any) -> str | None:

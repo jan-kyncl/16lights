@@ -33,6 +33,7 @@ from mizukage import Orientation
 from PIL import Image
 
 from l16core import calibration, depth, detail, fusion, geometry
+from l16core import exposure as exposure_mod
 from l16core import lri as lri_mod
 from l16core import native as native_mod
 from l16core import orientation as orient_mod
@@ -125,6 +126,7 @@ def process(
     prev = develop(lri, img, calib, Quality.PREVIEW)
     preview = downscale(prev.rgb, PREVIEW_MAX_SIDE)
     np.ascontiguousarray(preview, dtype="<f2").tofile(shot_dir / "preview_linear.f16")
+    auto_exposure = exposure_mod.auto_exposure(lri, img, src.read_bytes(), preview, prev.color)
     done()
 
     # akcelerometr nespolehlivý (pohyb) → Apple Vision: póza těla a obličej ve 4 otočeních
@@ -146,8 +148,7 @@ def process(
             orient_info["vision_scores"] = res.get("scores")
         done()
     orient_info["used"] = info.orientation
-    thumb = to_uint8(apply_tone(downscale(preview, THUMB_SIDE), prev.color, Edits()))
-    Image.fromarray(thumb).save(shot_dir / "thumb.jpg", quality=88)
+    write_thumb(shot_dir, preview, prev.color, Edits(exposure=auto_exposure["ev"]))
 
     done = timed("full_res", 0.45)
     full = develop(lri, img, calib, Quality.FULL)
@@ -227,6 +228,7 @@ def process(
         "device_id": profile.device_id if profile else None,
         "calibration_mode": calib.mode,
         "color": prev.color.to_dict(),
+        "auto_exposure": auto_exposure,
         "preview": {
             "width": int(preview.shape[1]),
             "height": int(preview.shape[0]),
@@ -708,6 +710,29 @@ def camera_thumb(shot_dir: Path, devices_root: Path, cam: str, size: int) -> byt
     return p.read_bytes()
 
 
+def write_thumb(shot_dir: Path, preview: np.ndarray, color: ColorParams, edits: Edits) -> None:
+    thumb = to_uint8(apply_tone(downscale(preview, THUMB_SIDE), color, edits))
+    Image.fromarray(thumb).save(shot_dir / "thumb.jpg", quality=88)
+
+
+def refresh_exposure(shot_dir: Path) -> dict[str, Any]:
+    """Doplní meta.auto_exposure (bez nového zpracování) a obnoví náhled v knihovně podle
+    aktuálních úprav snímku."""
+    meta = load_meta(shot_dir)
+    lri = lri_mod.open_lri(shot_dir / "original.lri")
+    ref = meta["reference_camera"]
+    img = next(i for i in lri.images if i.camera_id.name == ref)
+    color = ColorParams.from_dict(meta["color"])
+    preview = load_preview(shot_dir).astype(np.float32)
+    auto = exposure_mod.auto_exposure(
+        lri, img, (shot_dir / "original.lri").read_bytes(), preview, color
+    )
+    meta["auto_exposure"] = auto
+    write_json(shot_dir / "meta.json", meta)
+    write_thumb(shot_dir, preview, color, load_edits(shot_dir))
+    return auto
+
+
 def refresh_color(shot_dir: Path) -> ColorParams:
     """Přepočítá meta.color z LRI (barevné profily, CCT) bez nového zpracování.
 
@@ -729,9 +754,12 @@ def load_meta(shot_dir: Path) -> dict[str, Any]:
 
 
 def load_edits(shot_dir: Path) -> Edits:
+    """Uložené úpravy; nový snímek začíná s automatickou expozicí a vzhledem L16."""
     p = shot_dir / "edits.json"
     if not p.exists():
-        return Edits()
+        meta_p = shot_dir / "meta.json"
+        auto = json.loads(meta_p.read_text()).get("auto_exposure") if meta_p.exists() else None
+        return Edits(exposure=float(auto["ev"])) if auto else Edits()
     d = json.loads(p.read_text())
     # úpravy uložené před vzhledem L16 (2026-10-23) byly laděné na lineární tón
     d.setdefault("look", "none")

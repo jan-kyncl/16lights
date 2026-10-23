@@ -65,7 +65,7 @@ def analyze(shot_id: str, body: dict[str, Any]) -> dict[str, Any]:
     # automatická expozice: 99. percentil jasu → 0,9 (nezávislé na úpravách uživatele)
     y = lin @ np.array([0.2126, 0.7152, 0.0722], np.float32)
     lin *= 0.9 / max(float(np.percentile(y, 99)), 1e-4)
-    rgb8 = to_uint8(apply_tone(lin, ColorParams.from_dict(body["color"]), Edits()))
+    rgb8 = to_uint8(apply_tone(lin, ColorParams.from_dict(body["color"]), Edits(look="none")))
     res = vision.analyze(rgb8)
     cv2.imwrite(str(d / "person_mask.png"), (res["mask"] * 255).astype(np.uint8))
     out = {
@@ -92,9 +92,9 @@ def orient_ep(shot_id: str, body: dict[str, Any]) -> dict[str, Any]:
     lin = np.fromfile(d / "preview_linear.f16", dtype="<f2").reshape(h, w, 3).astype(np.float32)
     y = lin @ np.array([0.2126, 0.7152, 0.0722], np.float32)
     ev = float(np.log2(0.9 / max(float(np.percentile(y, 99)), 1e-4)))
-    rgb8 = to_uint8(apply_tone(lin, ColorParams.from_dict(body["color"]), Edits(exposure=ev)))[
-        ::2, ::2
-    ]
+    rgb8 = to_uint8(
+        apply_tone(lin, ColorParams.from_dict(body["color"]), Edits(exposure=ev, look="none"))
+    )[::2, ::2]
     scores = [
         round(vision.upright_score(np.ascontiguousarray(np.rot90(rgb8, -k))), 2) for k in range(4)
     ]

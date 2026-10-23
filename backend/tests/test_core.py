@@ -64,6 +64,8 @@ def test_process_creates_cache(synth_lri: Path, tmp_path: Path) -> None:
     assert meta["reference_camera"] == "A1"
     assert meta["calibration_mode"] == "header"
     assert {"code": "bayer_jpeg"} in meta["warnings"]
+    # nový snímek bez úprav začíná s automatickou expozicí
+    assert shot.load_edits(d).exposure == meta["auto_exposure"]["ev"]
     prev = shot.load_preview(d)
     assert prev.shape == (synth.H // 2, synth.W // 2, 3)
     full, color = shot.load_full(d)
@@ -231,3 +233,16 @@ def test_edits_saved_before_look_stay_linear(tmp_path: Path) -> None:
     assert shot.load_edits(tmp_path).look == "none"
     shot.save_edits(tmp_path, Edits(look="l16"))
     assert shot.load_edits(tmp_path).look == "l16"
+
+
+def test_auto_exposure_brightens_dark_scenes(synth_lri: Path) -> None:
+    from l16core.exposure import auto_exposure
+
+    f = lri.open_lri(synth_lri)
+    img = lri.pick_reference(f)
+    color = ColorParams(wb=(1.0, 1.0, 1.0), ccm=tuple(np.eye(3).reshape(-1)), illuminant=None)
+    data = synth_lri.read_bytes()
+    bright = auto_exposure(f, img, data, np.full((8, 8, 3), 0.2, np.float32), color)
+    dark = auto_exposure(f, img, data, np.full((8, 8, 3), 0.002, np.float32), color)
+    assert dark["ev"] > bright["ev"]
+    assert -2.0 <= bright["ev"] <= 3.0

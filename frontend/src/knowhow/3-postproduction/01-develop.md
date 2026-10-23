@@ -91,9 +91,26 @@ served to the preview by `GET /api/looks/l16`, structured exactly like a DNG cam
   with `edits = 0` registered onto the JPEG (SIFT homography), torch fit of curve + table + a free
   exposure per shot, 20 % of the shots held out. 8-bit MAE on held-out shots: 7.0 with the curve
   only, 6.3 with the HueSatMap (sRGB OETF alone: ~10 even with a fitted exposure). The camera
-  brightens night shots by ~+0.9 EV on top (auto exposure, not part of the look).
+  brightens night shots by ~+0.9 EV on top (auto exposure, not part of the look; see below).
 - Edits saved before the look existed load as `"none"`: their exposure was tuned for linear tone.
 - Shader ↔ `tone.py` parity with the look on: max 1/255 (headless Chrome readback, 2026-10-23).
+
+### Auto exposure (`meta.auto_exposure`)
+
+The camera exposes the reference module below its own preview exposure (ViewPreferences
+`image_gain · image_integration_time_ns` vs. the module's `analog_gain · digital_gain ·
+exposure_ns`): ~1 EV in daylight (highlight headroom), ~3.4 EV at night. Its JPEG gives back
+about two thirds of that. `l16core/exposure.py` predicts the exposure the look fit needed per shot:
+
+```
+ev = 0.528 · log2(preview / module exposure) − 0.108 · log2(log-mean luma) − 0.94     clamp −2…+3
+```
+
+Leave-one-out rms 0.22 EV on the 171 pairs (constant 0.45, metadata alone 0.25). Without
+ViewPreferences only the luma term (rms 0.34). Computed while processing, stored in
+`meta.auto_exposure`; a shot without saved edits starts with it, Reset / Before-after / double-click
+on Exposure return to it, the _Auto_ button sets it. Coefficients: `tools/look/fit_exposure.py`.
+`l16 recolor data/shots` adds it to existing shots (and re-renders the library thumbnail).
 
 **Parity check:** a WebGL screenshot against the server export with all sliders moved gives a max
 difference of 1.7/255 (`docs/progress/M2`).

@@ -35,7 +35,10 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
     api.geometry(shotId),
     api.look("l16").catch(() => null),
   ]);
-  let edits: Edits = { ...DEFAULT_EDITS, ...saved };
+  // Výchozí tón snímku: automatická expozice jako JPEG z foťáku (l16core/exposure.py)
+  const autoEv = meta.auto_exposure?.ev ?? 0;
+  const toneDefaults: Edits = { ...DEFAULT_EDITS, exposure: autoEv };
+  let edits: Edits = { ...toneDefaults, ...saved };
   if (edits.source === "fused" && !meta.fusion) edits = { ...edits, source: "single" };
   const firstPixels = edits.source === "fused" ? await api.preview(shotId, "fused") : pixels;
   let showOriginal = false;
@@ -55,7 +58,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
     frame = requestAnimationFrame(() =>
       renderer.render(
         meta.color,
-        showOriginal ? { ...DEFAULT_EDITS, ...geometry(edits) } : edits,
+        showOriginal ? { ...toneDefaults, ...geometry(edits) } : edits,
         // citlivost 0..1 → práh Sobelova gradientu 0.6..0.08
         peaking ? 0.6 - 0.52 * peakSensitivity : 0,
         Math.max(1, viewport.texelsPerPixel),
@@ -89,7 +92,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
       saveSoon();
     });
     const reset = () => {
-      edits = { ...edits, [key]: DEFAULT_EDITS[key] };
+      edits = { ...edits, [key]: toneDefaults[key] };
       sync();
       draw();
       saveSoon();
@@ -139,6 +142,21 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
       label,
     );
 
+  const autoBtn = h(
+    "button",
+    {
+      title: t().autoExposureHint,
+      disabled: !meta.auto_exposure,
+      onclick: () => {
+        edits = { ...edits, exposure: autoEv };
+        sync();
+        draw();
+        saveSoon();
+      },
+    },
+    t().autoExposure(autoEv),
+  );
+
   const compare = h("button", { title: t().beforeAfterHint }, t().beforeAfter);
   const hold = (v: boolean) => () => {
     showOriginal = v;
@@ -177,7 +195,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
       onclick: () => {
         // Reset vrací tón; geometrie, zdroj i refocus zůstanou
         edits = {
-          ...DEFAULT_EDITS,
+          ...toneDefaults,
           ...geometry(edits),
           f_number: edits.f_number,
           focus_distance: edits.focus_distance,
@@ -446,7 +464,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
     h("h2", {}, t().tone),
     h("div", { class: "seg", "aria-label": t().look }, ...lookBtns),
     ...sliders,
-    h("div", { class: "row" }, compare, resetAll),
+    h("div", { class: "row" }, autoBtn, compare, resetAll),
     h("h2", {}, t().dof),
     peakToggle,
     peakSlider,
