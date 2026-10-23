@@ -2,17 +2,7 @@ import type { ShotGeometry } from "./align";
 import { api, type ShotMeta } from "./api";
 import { h, toast } from "./dom";
 import { t } from "./i18n";
-import type { Renderer } from "./renderer";
-
-/** IEEE half → float (pro čtení hloubky v JS). */
-function halfToFloat(hb: number): number {
-  const s = hb & 0x8000 ? -1 : 1;
-  const e = (hb >> 10) & 0x1f;
-  const f = hb & 0x3ff;
-  if (e === 0) return s * 2 ** -14 * (f / 1024);
-  if (e === 31) return f ? NaN : s * Infinity;
-  return s * 2 ** (e - 15) * (1 + f / 1024);
-}
+import { halfToFloat, type Renderer } from "./renderer";
 
 interface Depth {
   inv: Float32Array;

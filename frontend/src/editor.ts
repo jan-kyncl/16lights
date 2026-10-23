@@ -13,7 +13,8 @@ type SliderKey =
   | "contrast"
   | "highlights"
   | "shadows"
-  | "saturation";
+  | "saturation"
+  | "dynamic_range";
 
 // Popisek = klíč slovníku stejného jména.
 const SLIDERS: [SliderKey, number, number, number][] = [
@@ -24,6 +25,7 @@ const SLIDERS: [SliderKey, number, number, number][] = [
   ["highlights", -1, 1, 0.01],
   ["shadows", -1, 1, 0.01],
   ["saturation", -1, 1, 0.01],
+  ["dynamic_range", 0, 1, 0.01],
 ];
 
 export async function renderEditor(root: HTMLElement, shotId: string): Promise<void> {
@@ -51,6 +53,26 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
   if (look) renderer.setLook(look);
   renderer.setRotation(edits.rotate);
   const displayWidth = () => (edits.rotate % 180 ? meta.full.height : meta.full.width);
+
+  // Základní vrstva pro Dynamic range: stáhne se, až když je potřeba (6 MB), zvlášť pro zdroj.
+  let baseFor: Edits["source"] | null = null;
+  let baseLoading: Promise<void> | null = null;
+  const ensureBase = () => {
+    if (edits.dynamic_range <= 0 || baseFor === edits.source || baseLoading) return;
+    const src = edits.source;
+    baseLoading = api
+      .base(shotId, src)
+      .then((bits) => {
+        renderer.setBase(bits, meta.preview.width, meta.preview.height);
+        baseFor = src;
+        draw();
+      })
+      .catch((e: Error) => toast(e.message, "error"))
+      .finally(() => {
+        baseLoading = null;
+        ensureBase();
+      });
+  };
 
   let frame = 0;
   const draw = () => {
@@ -88,6 +110,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
     range.addEventListener("input", () => {
       edits = { ...edits, [key]: Number(range.value) };
       out.textContent = edits[key].toFixed(2);
+      ensureBase();
       draw();
       saveSoon();
     });
@@ -107,6 +130,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
     );
   });
   sync();
+  ensureBase();
 
   const exportBtn = (fmt: string, label: string, disabled = false, hires = false) =>
     h(
@@ -320,6 +344,9 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
       if (edits.source === src) return;
       edits = { ...edits, source: src };
       for (const x of srcBtns) x.setAttribute("aria-pressed", String(x === b));
+      renderer.setBase(null);
+      baseFor = null;
+      ensureBase();
       saveSoon();
       try {
         renderer.setImage(await api.preview(shotId, src), meta.preview.width, meta.preview.height);

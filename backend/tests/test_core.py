@@ -263,3 +263,28 @@ def test_versions_match() -> None:
         pytest.skip("mimo celý repozitář (Docker build context)")
     assert tomllib.loads(native.read_text())["project"]["version"] == ver
     assert json.loads(frontend.read_text())["version"] == ver
+
+
+def test_dynamic_range_compresses_base_keeps_detail() -> None:
+    from l16core.tone import base_gain, log_luma_base
+
+    color = ColorParams(wb=(1.0, 1.0, 1.0), ccm=tuple(np.eye(3).reshape(-1)), illuminant=None)
+    # tmavá a světlá polovina (8 EV od sebe) s jemnou texturou
+    img = np.full((64, 128, 3), 0.01, np.float32)
+    img[:, 64:] = 2.56
+    img *= (1 + 0.1 * np.sin(np.arange(128) * 1.3))[None, :, None].astype(np.float32)
+    base = log_luma_base(img, color)
+    np.testing.assert_allclose(base[:, 10:20].mean(), np.log2(0.01), atol=0.2)
+    g = base_gain(base, 1.0)
+    assert g[:, :20].mean() > 4 and g[:, -20:].mean() < 0.25  # stíny nahoru, světla dolů
+    np.testing.assert_array_equal(base_gain(base, 0.0), 1.0)  # slider 0 = identita
+    off = apply_tone(img, color, Edits(look="none"), encode=False)
+    on = apply_tone(img, color, Edits(look="none", dynamic_range=1.0), encode=False)
+
+    # textura v tmavé části zůstane aspoň zčásti: guided filter s malým eps (méně halo) bere
+    # silnou jemnou texturu (±10 %) zhruba z poloviny jako hrany a ta se stlačí s vrstvou
+    # (naměřeno 0,50 při plné síle, 2026-10-23)
+    def amp(x: np.ndarray) -> float:
+        return float(np.log2(x[5, 10:40, 1]).std())
+
+    assert amp(on) > 0.45 * amp(off)

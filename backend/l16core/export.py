@@ -9,6 +9,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+import cv2
 import numpy as np
 import structlog
 import tifffile
@@ -72,14 +73,22 @@ def render(
             f_eq = float(shot.load_meta(shot_dir)["info"].get("focal_length_mm") or 35)
             scale = refocus.coc_scale(f_eq, edits.f_number, max(rgb.shape[:2]))
             rgb = refocus_fn(rgb, inv, 1.0 / edits.focus_distance, scale)
+    base: np.ndarray | None = None
+    base_mean: float | None = None
+    if edits.dynamic_range > 0 and fmt != ExportFormat.DNG:
+        # stejná vrstva jako v náhledu (rozměr náhledu), bilineárně zvětšená jako textura v GL
+        small = shot.load_base(shot_dir, edits.source).astype(np.float32)
+        base_mean = float(np.mean(small, dtype=np.float64))
+        size = (rgb.shape[1], rgb.shape[0])
+        base = np.asarray(cv2.resize(small, size, interpolation=cv2.INTER_LINEAR), np.float32)
     buf = io.BytesIO()
     if fmt == ExportFormat.DNG:
         write_dng(buf, apply_flip(rgb, edits), color, edits, shot.load_meta(shot_dir))
     elif fmt == ExportFormat.JPEG:
-        srgb = apply_flip(apply_tone(rgb, color, edits), edits)
+        srgb = apply_flip(apply_tone(rgb, color, edits, base=base, base_mean=base_mean), edits)
         Image.fromarray(to_uint8(srgb)).save(buf, "JPEG", quality=jpeg_quality, subsampling=0)
     else:
-        srgb = apply_flip(apply_tone(rgb, color, edits), edits)
+        srgb = apply_flip(apply_tone(rgb, color, edits, base=base, base_mean=base_mean), edits)
         tifffile.imwrite(buf, to_uint16(srgb), photometric="rgb", compression="zlib")
     log.info(
         "export",

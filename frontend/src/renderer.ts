@@ -27,6 +27,16 @@ void main() {
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
+/** IEEE half → float (čtení hloubky a základní vrstvy v JS). */
+export function halfToFloat(hb: number): number {
+  const s = hb & 0x8000 ? -1 : 1;
+  const e = (hb >> 10) & 0x1f;
+  const f = hb & 0x3ff;
+  if (e === 0) return s * 2 ** -14 * (f / 1024);
+  if (e === 31) return f ? NaN : s * Infinity;
+  return s * 2 ** (e - 15) * (1 + f / 1024);
+}
+
 const UNIFORMS = [
   "uImage",
   "uExposure",
@@ -36,6 +46,9 @@ const UNIFORMS = [
   "uShadows",
   "uContrast",
   "uSaturation",
+  "uBase",
+  "uDynRange",
+  "uBaseMean",
   "uLookOn",
   "uLookTable",
   "uLookCurve",
@@ -162,6 +175,8 @@ export class Renderer {
   private lookTex: WebGLTexture | null = null;
   private lookCurve: Float32Array | null = null;
   private lookN = 0;
+  private baseTex: WebGLTexture | null = null;
+  private baseMean = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -240,6 +255,26 @@ export class Renderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
 
+  /** Základní vrstva lokálního tone mappingu (R16F, rozměr náhledu), null = žádná. */
+  setBase(halfBits: Uint16Array | null, width = 0, height = 0): void {
+    const gl = this.gl;
+    if (this.baseTex) gl.deleteTexture(this.baseTex);
+    this.baseTex = null;
+    if (!halfBits) return;
+    this.baseTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.baseTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, width, height, 0, gl.RED, gl.HALF_FLOAT, halfBits);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // log-průměr vrstvy jako tone.base_gain (float64 součet)
+    let sum = 0;
+    for (const hb of halfBits) sum += halfToFloat(hb);
+    this.baseMean = sum / halfBits.length;
+  }
+
   /** Tabulky vzhledu; RGBA32F se čte přes texelFetch (bez filtrování, shodně s tone.py). */
   setLook(look: Look): void {
     const gl = this.gl;
@@ -306,6 +341,15 @@ export class Renderer {
     gl.uniform1f(this.loc.uShadows, e.shadows);
     gl.uniform1f(this.loc.uContrast, e.contrast);
     gl.uniform1f(this.loc.uSaturation, e.saturation);
+    const dyn = this.baseTex ? e.dynamic_range : 0;
+    gl.uniform1f(this.loc.uDynRange, dyn);
+    if (dyn > 0) {
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, this.baseTex);
+      gl.uniform1i(this.loc.uBase, 5);
+      gl.uniform1f(this.loc.uBaseMean, this.baseMean);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     const lookOn = e.look !== "none" && this.lookTex !== null && this.lookCurve !== null;
     gl.uniform1i(this.loc.uLookOn, lookOn ? 1 : 0);
     if (lookOn && this.lookCurve) {

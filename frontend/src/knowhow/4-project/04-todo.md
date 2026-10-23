@@ -13,8 +13,8 @@ are 3× faster. Ordered by impact:
        gain. lux merges per module, then across modules
 2. [x] **Chroma + luma denoise** after fusion (à trous wavelet, measured noise, texture floor). Noise now 25–70 % below lux on all measured shots, guided by luma and the noise model (chroma noise in
        shadows is the most visible gap)
-3. [ ] **Exposure from metadata** (done: auto exposure, see 5) + **local tone mapping** using the
-       fusion's HDR range
+3. [x] **Exposure from metadata** (auto exposure, see 5) + **local tone mapping** (_Dynamic range_
+       slider, guided-filter base layer, off by default because the camera JPEG does not use it)
 4. [ ] **52 MP without artefacts, full frame**: reject misaligned B tiles (colour threads on
        backlit edges), B poses from `mirror_position`, sub-pixel super-resolution from the A modules
        where no B module reaches. Target 52–75 MP

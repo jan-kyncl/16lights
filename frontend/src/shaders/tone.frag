@@ -13,6 +13,10 @@ uniform float uHighlights;
 uniform float uShadows;
 uniform float uContrast;
 uniform float uSaturation;
+// Lokální tone mapping (tone.py::base_gain): základní vrstva log2 jasu v rozměru náhledu
+uniform highp sampler2D uBase;
+uniform float uDynRange;   // 0 = vypnuto
+uniform float uBaseMean;
 // Vzhled (tone.py::Look): HueSatMap jako RGBA32F (x = odstín, y = sytost) a tónová křivka
 uniform bool uLookOn;
 uniform highp sampler2D uLookTable;
@@ -253,6 +257,11 @@ void main() {
   else if (uHiresRect.z > 0.0 && all(greaterThanEqual(hr, vec2(0.0))) && all(lessThanEqual(hr, vec2(1.0))))
     lin = texture(uHires, hr).rgb;
   else lin = texture(uImage, vUv).rgb;
+  if (uDynRange > 0.0) {
+    float d = texture(uBase, vUv).r - uBaseMean;
+    const float R = 1.5;  // BASE_RANGE
+    lin *= exp2(uDynRange * (R * tanh(d / R) - d));
+  }
   outColor = vec4(tone(lin), 1.0);
 
   if (uOverlay > 0) {

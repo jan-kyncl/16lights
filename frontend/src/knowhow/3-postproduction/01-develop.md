@@ -42,7 +42,7 @@ Computed once per shot (`tone.color_params`), stored in `meta.color`:
 - The CCM follows the **edited** WB: temperature / tint change the neutral, so the CCT and the matrix
   move with them. The preview computes the same in `frontend/src/color.ts` (parity ≤ 2·10⁻⁷).
 - Old bug (until 2026-10-23): the profile was picked by comparing its r/g, b/g ratios (sensor
-  response to white) with the AWB *gains* (their inverse), so daylight got the A matrix and
+  response to white) with the AWB _gains_ (their inverse), so daylight got the A matrix and
   tungsten got D65: greenish greys at night. `l16 recolor data/shots` rewrites `meta.color` of
   existing shots without reprocessing.
 
@@ -52,7 +52,8 @@ Computed once per shot (`tone.color_params`), stored in `meta.color`:
 (preview) implement **the same formula**. Change both together.
 
 ```
-v   = cam · 2^EV · gains                        1. exposure + WB (no clip, see develop step 6)
+v   = cam · 2^(s · (R·tanh(d/R) − d))            0. dynamic range (if s > 0), d = base − mean(base)
+v   = v · 2^EV · gains                          1. exposure + WB (no clip, see develop step 6)
 v   = max(CCM(gains) · v, 0)                    2. camera RGB → linear sRGB
 v   = PP⁻¹ · HueSatMap(PP · v)                     look (if on), PP = lin. sRGB → lin. ProPhoto
 y   = lum(v)^(1/2.2)                            3. highlights / shadows
@@ -94,6 +95,25 @@ served to the preview by `GET /api/looks/l16`, structured exactly like a DNG cam
   brightens night shots by ~+0.9 EV on top (auto exposure, not part of the look; see below).
 - Edits saved before the look existed load as `"none"`: their exposure was tuned for linear tone.
 - Shader ↔ `tone.py` parity with the look on: max 1/255 (headless Chrome readback, 2026-10-23).
+
+### Dynamic range (local tone mapping, `edits.dynamic_range`)
+
+Compresses the large-scale brightness (lamps, windows, deep shadows) and keeps local detail, so
+the fusion's HDR range above 1.0 becomes visible. Off by default: on the 171 camera-JPEG pairs every
+strength made the match worse (MAE 9.2 → 9.4 at 0.15 → 10.2 at 0.5), the camera does not do it.
+
+- **Base layer**: log2 luminance of the preview (as-shot WB, exposure 0, before the look),
+  self-guided filter with radius 6 % of the long side and `eps = 0.01` (0.04 left a bright rim
+  around lamps and windows). Computed lazily per source (`base_<linear|fused>_r…_e….f16`,
+  parameters in the name), served by `GET /api/shots/{id}/base`, fetched by the editor only when
+  the slider is above 0.
+- **Gain**: `d = base − mean(base)`, `gain = 2^(s · (R·tanh(d/R) − d))`, `R = 1.5 EV`: deviations
+  are softly limited to ±1.5 EV, mid-tones barely move, `s = 0` is exactly identity, global
+  brightness stays with the exposure.
+- Export resizes the preview-size layer bilinearly (like the GL texture) and uses its mean at
+  preview size; shader ↔ export parity max 1/255. Not applied to DNG (left to the raw developer).
+- Trade-off: strong fine texture (±10 %) in extreme zones is partly treated as an edge and
+  compressed with the base (about half of its amplitude at full strength).
 
 ### Auto exposure (`meta.auto_exposure`)
 

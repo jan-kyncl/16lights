@@ -38,7 +38,16 @@ from l16core import lri as lri_mod
 from l16core import native as native_mod
 from l16core import orientation as orient_mod
 from l16core.develop import Quality, develop, downscale, orient
-from l16core.tone import ColorParams, Edits, apply_tone, color_params, to_uint8
+from l16core.tone import (
+    BASE_EPS,
+    BASE_RADIUS,
+    ColorParams,
+    Edits,
+    apply_tone,
+    color_params,
+    log_luma_base,
+    to_uint8,
+)
 
 log = structlog.get_logger()
 
@@ -781,6 +790,30 @@ def load_full(shot_dir: Path, source: str = "single") -> tuple[np.ndarray, Color
     )
     rgb = np.load(p).astype(np.float32)
     return rgb, ColorParams.from_dict(meta["color"])
+
+
+def base_paths(shot_dir: Path, source: str) -> tuple[Path, Path]:
+    """(náhled, cache základní vrstvy); parametry filtru v názvu, změna je zneplatní."""
+    name = "fused" if source == "fused" and (shot_dir / "preview_fused.f16").exists() else "linear"
+    key = f"r{BASE_RADIUS}_e{BASE_EPS}"
+    return shot_dir / f"preview_{name}.f16", shot_dir / f"base_{name}_{key}.f16"
+
+
+def load_base(shot_dir: Path, source: str = "single") -> np.ndarray:
+    """Základní vrstva lokálního tone mappingu v rozměru náhledu (float16, cache na disku).
+
+    Počítá se líně z `preview_<linear|fused>.f16` a přepočítá se, když je náhled novější.
+    """
+    meta = load_meta(shot_dir)
+    w, h = meta["preview"]["width"], meta["preview"]["height"]
+    src, dst = base_paths(shot_dir, source)
+    if not dst.exists() or dst.stat().st_mtime < src.stat().st_mtime:
+        for old in shot_dir.glob(f"base_{dst.name.split('_')[1]}_*.f16"):
+            old.unlink()
+        pv = np.fromfile(src, dtype="<f2").reshape(h, w, 3).astype(np.float32)
+        base = log_luma_base(pv, ColorParams.from_dict(meta["color"]))
+        np.ascontiguousarray(base, dtype="<f2").tofile(dst)
+    return np.fromfile(dst, dtype="<f2").reshape(h, w)
 
 
 def load_preview(shot_dir: Path) -> np.ndarray:

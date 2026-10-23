@@ -28,6 +28,7 @@ export interface Edits {
   highlights: number;
   shadows: number;
   saturation: number;
+  dynamic_range: number; // 0..1 lokální tone mapping
   focus_distance: number | null;
   f_number: number | null;
   flip_h: boolean;
@@ -55,6 +56,7 @@ export const DEFAULT_EDITS: Edits = {
   highlights: 0,
   shadows: 0,
   saturation: 0,
+  dynamic_range: 0,
   focus_distance: null,
   f_number: null,
   flip_h: false,
@@ -211,6 +213,13 @@ export const api = {
       `${BASE}/shots/${id}/preview${source === "fused" ? "?source=fused" : ""}`,
     );
     if (!res.ok) throw new Error(`preview: ${res.status}`);
+    return new Uint16Array(await res.arrayBuffer());
+  },
+
+  /** Základní vrstva lokálního tone mappingu (half-float, 1 kanál, rozměr náhledu). */
+  async base(id: string, source: Edits["source"] = "single"): Promise<Uint16Array> {
+    const res = await fetch(`${BASE}/shots/${id}/base${source === "fused" ? "?source=fused" : ""}`);
+    if (!res.ok) throw new Error(`base: ${res.status}`);
     return new Uint16Array(await res.arrayBuffer());
   },
 

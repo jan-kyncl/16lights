@@ -216,6 +216,20 @@ def get_preview(shot_id: str, request: Request, source: str = "single") -> Respo
     )
 
 
+@app.get("/api/shots/{shot_id}/base")
+def get_base(shot_id: str, request: Request, source: str = "single") -> Response:
+    """Základní vrstva lokálního tone mappingu (half-float, rozměr náhledu)."""
+    d = processed_dir(shot_id)
+    shot.load_base(d, source)
+    meta = shot.load_meta(d)
+    return cached_file(
+        request,
+        shot.base_paths(d, source)[1],
+        "application/octet-stream",
+        {"X-Width": str(meta["preview"]["width"]), "X-Height": str(meta["preview"]["height"])},
+    )
+
+
 @app.get("/api/shots/{shot_id}/full")
 def get_full(shot_id: str, request: Request, cam: str | None = None) -> Response:
     """Plné rozlišení jako surové RGB float16 LE (data z frames/<cam>.npy bez hlavičky)."""

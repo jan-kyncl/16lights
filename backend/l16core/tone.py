@@ -100,6 +100,7 @@ class Edits:
     highlights: float = 0.0  # -1..1 (EV v jasných partiích)
     shadows: float = 0.0  # -1..1 (EV ve stínech)
     saturation: float = 0.0  # -1..1
+    dynamic_range: float = 0.0  # 0..1 lokální komprese (stíny nahoru, světla dolů), detail zůstane
     focus_distance: float | None = None  # m, M3
     f_number: float | None = None  # M3
     flip_h: bool = False  # zrcadlení vodorovně (geometrie, ne tón)
@@ -366,12 +367,64 @@ def srgb_oetf(v: F32) -> F32:
     )
 
 
-def apply_tone(cam_rgb: F32, color: ColorParams, edits: Edits, *, encode: bool = True) -> F32:
-    """Kamerové lineární RGB (H, W, 3) → sRGB [0..1] (nebo lineární sRGB při encode=False)."""
+# Lokální tone mapping: základní vrstva = log2 jasu vyhlazený guided filtrem (zachová hrany, bez
+# halo), poloměr jako podíl delší strany náhledu. Komprese base_gain: odchylka vrstvy od
+# log-průměru se měkce omezí na ±BASE_RANGE EV (tanh, střední tóny beze změny) a slider prolíná
+# v EV mezi původní a omezenou vrstvou, takže 0 je přesně identita.
+BASE_RADIUS = 0.06
+BASE_EPS = 0.01  # 0,04 nechávalo kolem lamp a oken světlý lem (2026-10-23)
+BASE_RANGE = 1.5
+
+
+def _box(x: F32, r: int) -> F32:
+    k = (2 * r + 1, 2 * r + 1)
+    return np.asarray(cv2.boxFilter(x, -1, k, borderType=cv2.BORDER_REFLECT), dtype=np.float32)
+
+
+def log_luma_base(cam_rgb: F32, color: ColorParams) -> F32:
+    """Základní vrstva pro `dynamic_range`: as-shot WB, expozice 0, před vzhledem."""
+    gains = np.asarray(color.wb, dtype=np.float32)
+    ccm, _ = ccm_for(color, gains)
+    lum = np.maximum((cam_rgb.astype(np.float32) * gains) @ ccm.T, 0.0) @ LUMA
+    g = np.log2(np.maximum(lum, 2.0**-14)).astype(np.float32)
+    r = max(2, round(max(g.shape) * BASE_RADIUS))
+    mean, var = _box(g, r), _box(g * g, r) - _box(g, r) ** 2
+    a = (var / (var + BASE_EPS)).astype(np.float32)
+    out: F32 = (_box(a, r) * g + _box((mean - a * mean).astype(np.float32), r)).astype(np.float32)
+    return out
+
+
+def base_gain(base: F32, strength: float, mean: float | None = None) -> F32:
+    """Zisk z komprese základní vrstvy (`mean` = log-průměr vrstvy, shodně s shaderem)."""
+    m = float(np.mean(base, dtype=np.float64)) if mean is None else mean
+    d = base - np.float32(m)
+    r = np.float32(BASE_RANGE)
+    out: F32 = np.exp2(np.float32(strength) * (r * np.tanh(d / r) - d)).astype(np.float32)
+    return out
+
+
+def apply_tone(
+    cam_rgb: F32,
+    color: ColorParams,
+    edits: Edits,
+    *,
+    encode: bool = True,
+    base: F32 | None = None,
+    base_mean: float | None = None,
+) -> F32:
+    """Kamerové lineární RGB (H, W, 3) → sRGB [0..1] (nebo lineární sRGB při encode=False).
+
+    `base` = základní vrstva (`log_luma_base`) ve stejném rozměru, `base_mean` její log-průměr
+    v původním rozlišení (export ji zvětšuje); bez ní se při `dynamic_range > 0` spočítá
+    z obrazu samotného.
+    """
     exp = np.float32(2.0**edits.exposure)
     gains = wb_gains(color, edits)
     # Přepaly jsou už v datech stažené do neutrální (develop.recover_highlights), bez ořezu.
     v = cam_rgb.astype(np.float32) * (exp * gains)
+    if edits.dynamic_range > 0:
+        b = log_luma_base(cam_rgb, color) if base is None else base
+        v *= base_gain(b, edits.dynamic_range, base_mean)[..., None]
 
     ccm, _ = ccm_for(color, gains)
     v = np.maximum(v @ ccm.T, 0.0)
