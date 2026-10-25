@@ -5,6 +5,20 @@ whole repo: `backend/pyproject.toml` is the source, `native/pyproject.toml` and
 `frontend/package.json` must match (checked by a test). Every shot records the version that
 processed it (`meta.json` → `version`), shown in the editor's info panel.
 
+## 0.3.0 – 2026-10-25
+
+Local tone mapping and a comparison tool.
+
+- **Dynamic range** slider (`edits.dynamic_range`, 0–1): local tone mapping that compresses
+  large-scale brightness (lamps, windows, deep shadows) and keeps local detail, so the fusion's HDR
+  range above 1.0 becomes visible. Base layer = guided-filtered log luminance of the preview
+  (`GET /api/shots/{id}/base`, cached per source). Shader ↔ export parity max 1/255; not applied to
+  DNG. Off by default: the camera JPEGs have no local tone mapping.
+- The gain is applied before refocus (export and shader), so the sharp base layer does not stamp
+  outlines into the bokeh.
+- `tools/compare/gallery.py`: static side-by-side page of processing variants, the camera JPEG and
+  lux, aligned (keys 1–9 switch at the same zoom).
+
 ## 0.2.0 – 2026-10-23
 
 Image quality: noise, colour, look and exposure.
