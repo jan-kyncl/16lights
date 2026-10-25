@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ from l16core.tone import (
     Look,
     apply_flip,
     apply_tone,
+    base_gain,
     eval_curve,
     load_look,
     to_uint8,
@@ -67,28 +69,31 @@ def render(
         color = ColorParams.from_dict(shot.load_meta(shot_dir)["color"])
     else:
         rgb, color = shot.load_full(shot_dir, edits.source)
+    tone_edits = edits
+    if edits.dynamic_range > 0 and fmt != ExportFormat.DNG:
+        # stejná vrstva jako v náhledu (rozměr náhledu), bilineárně zvětšená jako textura v GL;
+        # zisk se aplikuje už tady, před refocusem: vrstva je z ostrého obrazu a po refocusu by
+        # vtiskla obrysy do bokehu (zisk je skalár na pixel, jinak je pořadí vůči tónování jedno)
+        small = shot.load_base(shot_dir, edits.source).astype(np.float32)
+        base_mean = float(np.mean(small, dtype=np.float64))
+        size = (rgb.shape[1], rgb.shape[0])
+        base = np.asarray(cv2.resize(small, size, interpolation=cv2.INTER_LINEAR), np.float32)
+        rgb = rgb * base_gain(base, edits.dynamic_range, base_mean)[..., None]
+        tone_edits = replace(edits, dynamic_range=0.0)
     if not hires and edits.f_number and edits.focus_distance:
         inv = shot.load_depth_display(shot_dir, (rgb.shape[1], rgb.shape[0]))
         if inv is not None:
             f_eq = float(shot.load_meta(shot_dir)["info"].get("focal_length_mm") or 35)
             scale = refocus.coc_scale(f_eq, edits.f_number, max(rgb.shape[:2]))
             rgb = refocus_fn(rgb, inv, 1.0 / edits.focus_distance, scale)
-    base: np.ndarray | None = None
-    base_mean: float | None = None
-    if edits.dynamic_range > 0 and fmt != ExportFormat.DNG:
-        # stejná vrstva jako v náhledu (rozměr náhledu), bilineárně zvětšená jako textura v GL
-        small = shot.load_base(shot_dir, edits.source).astype(np.float32)
-        base_mean = float(np.mean(small, dtype=np.float64))
-        size = (rgb.shape[1], rgb.shape[0])
-        base = np.asarray(cv2.resize(small, size, interpolation=cv2.INTER_LINEAR), np.float32)
     buf = io.BytesIO()
     if fmt == ExportFormat.DNG:
         write_dng(buf, apply_flip(rgb, edits), color, edits, shot.load_meta(shot_dir))
     elif fmt == ExportFormat.JPEG:
-        srgb = apply_flip(apply_tone(rgb, color, edits, base=base, base_mean=base_mean), edits)
+        srgb = apply_flip(apply_tone(rgb, color, tone_edits), edits)
         Image.fromarray(to_uint8(srgb)).save(buf, "JPEG", quality=jpeg_quality, subsampling=0)
     else:
-        srgb = apply_flip(apply_tone(rgb, color, edits, base=base, base_mean=base_mean), edits)
+        srgb = apply_flip(apply_tone(rgb, color, tone_edits), edits)
         tifffile.imwrite(buf, to_uint16(srgb), photometric="rgb", compression="zlib")
     log.info(
         "export",

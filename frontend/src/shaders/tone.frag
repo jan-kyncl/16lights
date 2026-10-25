@@ -169,6 +169,15 @@ float depthInvAt(vec2 uv) {
   return texture(uDepth, vec2(dot(uOrientU, u1), dot(uOrientV, u1))).r;
 }
 
+// zisk lokálního tone mappingu (≡ tone.py::base_gain); v refocusu na každý vzorek, aby se
+// obrysy z ostré základní vrstvy nevtiskly do bokehu
+float baseGain(vec2 uv) {
+  if (uDynRange <= 0.0) return 1.0;
+  float d = texture(uBase, uv).r - uBaseMean;
+  const float R = 1.5;  // BASE_RANGE
+  return exp2(uDynRange * (R * tanh(d / R) - d));
+}
+
 vec3 refocus(vec2 uv) {
   vec2 tsize = vec2(textureSize(uImage, 0));
   float width = max(tsize.x, tsize.y);
@@ -177,14 +186,14 @@ vec3 refocus(vec2 uv) {
   vec2 px = 1.0 / tsize;
   float cInv = depthInvAt(uv);
   float cSize = min(maxBlur, uCocScale * abs(cInv - uFocusInv));
-  vec3 col = texture(uImage, uv).rgb;
+  vec3 col = texture(uImage, uv).rgb * baseGain(uv);
   float tot = 1.0;
   float radius = 0.5 * step;
   float ang = 0.0;
   for (int i = 0; i < 2000; i++) {
     if (radius >= maxBlur) break;
     vec2 tc = uv + vec2(cos(ang), sin(ang)) * radius * px;
-    vec3 sc = texture(uImage, tc).rgb;
+    vec3 sc = texture(uImage, tc).rgb * baseGain(tc);
     float sInv = depthInvAt(tc);
     float sSize = min(maxBlur, uCocScale * abs(sInv - uFocusInv));
     // vzorek dál než střed nesmí rozmazat ostřejší popředí
@@ -253,15 +262,10 @@ void main() {
   float e = exp2(uExposure);
   vec3 lin;
   vec2 hr = (vUv - uHiresRect.xy) / max(uHiresRect.zw, vec2(1e-6));
-  if (uCocScale > 0.0) lin = refocus(vUv);
+  if (uCocScale > 0.0) lin = refocus(vUv);  // zisk vrstvy už po vzorcích
   else if (uHiresRect.z > 0.0 && all(greaterThanEqual(hr, vec2(0.0))) && all(lessThanEqual(hr, vec2(1.0))))
-    lin = texture(uHires, hr).rgb;
-  else lin = texture(uImage, vUv).rgb;
-  if (uDynRange > 0.0) {
-    float d = texture(uBase, vUv).r - uBaseMean;
-    const float R = 1.5;  // BASE_RANGE
-    lin *= exp2(uDynRange * (R * tanh(d / R) - d));
-  }
+    lin = texture(uHires, hr).rgb * baseGain(vUv);
+  else lin = texture(uImage, vUv).rgb * baseGain(vUv);
   outColor = vec4(tone(lin), 1.0);
 
   if (uOverlay > 0) {

@@ -288,3 +288,30 @@ def test_dynamic_range_compresses_base_keeps_detail() -> None:
         return float(np.log2(x[5, 10:40, 1]).std())
 
     assert amp(on) > 0.45 * amp(off)
+
+
+def test_dynamic_range_before_refocus(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Zisk lokálního TM jde před refocus: ostrá vrstva se nesmí vtisknout do bokehu."""
+    import io
+
+    from PIL import Image
+
+    from l16core import export, shot
+    from l16core.tone import log_luma_base
+
+    color = ColorParams(wb=(1.0, 1.0, 1.0), ccm=tuple(np.eye(3).reshape(-1)), illuminant=None)
+    img = np.full((32, 64, 3), 0.02, np.float32)
+    img[:, ::8] = 1.0  # ostré světlé pruhy v pozadí
+    meta = {"info": {"focal_length_mm": 28}}
+    monkeypatch.setattr(shot, "load_full", lambda d, src: (img, color))
+    monkeypatch.setattr(shot, "load_meta", lambda d: meta)
+    monkeypatch.setattr(shot, "load_base", lambda d, src: log_luma_base(img, color))
+    monkeypatch.setattr(shot, "load_depth_display", lambda d, size: np.zeros(img.shape[:2]))
+
+    def flat(rgb: np.ndarray, *_: object) -> np.ndarray:  # dokonalý bokeh = průměr
+        return np.broadcast_to(rgb.mean(axis=(0, 1)), rgb.shape).astype(np.float32)
+
+    e = Edits(look="none", dynamic_range=1.0, f_number=1.4, focus_distance=1.0)
+    data = export.render(tmp_path, e, export.ExportFormat.TIFF, refocus_fn=flat)
+    out = np.asarray(Image.open(io.BytesIO(data)), np.float32)
+    assert out.std(axis=(0, 1)).max() < 1.0

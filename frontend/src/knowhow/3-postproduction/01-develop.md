@@ -112,6 +112,10 @@ strength made the match worse (MAE 9.2 → 9.4 at 0.15 → 10.2 at 0.5), the cam
   brightness stays with the exposure.
 - Export resizes the preview-size layer bilinearly (like the GL texture) and uses its mean at
   preview size; shader ↔ export parity max 1/255. Not applied to DNG (left to the raw developer).
+- **Before refocus**: the layer comes from the sharp image, so its gain is applied to the linear
+  camera RGB *before* the synthetic aperture (export: before `refocus_fn`; shader: per gather
+  sample). Applied after the blur, it stamped sharp branch and edge outlines into the bokeh
+  (fixed in 0.3.0). Without refocus the order does not matter, the gain is a per-pixel scalar.
 - Trade-off: strong fine texture (±10 %) in extreme zones is partly treated as an edge and
   compressed with the base (about half of its amplitude at full strength).
 
