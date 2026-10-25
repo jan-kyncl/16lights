@@ -67,6 +67,10 @@ class ShotInfo:
     def camera_names(self) -> list[str]:
         return [c.camera for c in self.cameras]
 
+    def mirror_halls(self) -> dict[str, int | None]:
+        """Poloha zrcátek (Hall kód) podle modulu – pro pózy modulů se zrcátkem."""
+        return {c.camera: c.mirror_position for c in self.cameras}
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 

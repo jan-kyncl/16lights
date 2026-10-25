@@ -5,6 +5,12 @@ Konvence ověřené na reálném LRI (epipolární chyba SIFT shod, docs/progres
   střed pixelu na celém čísle,
 - extrinsika vůči A1 v mm: X_cam = R · X_A1 + t,
 - distorze: radiální polynom, raw = poly(ideal) (stejně jako mizukage DistortionParams).
+
+Moduly se zrcátkem (B, C kromě pevných) nemají `canonical` extrinsiku, ale model zrcátka:
+skutečná kamera + rovina zrcátka natočená podle polohy aktuátoru (Hall kód snímku). Póza je
+virtuální kamera = odraz skutečné; odraz otočí orientaci (det −1), takže se jedna osa obrazu
+překlopí – která, vyjde z toho, co je bližší osám A1 (B1/B5 x, B2/B3 y). Ověřeno 2026-10-25:
+rotace 0,06–0,6° a translace ~5–10 mm proti PnP z metrické hloubky A modulů (režim 28).
 """
 
 from __future__ import annotations
@@ -28,17 +34,20 @@ F64 = NDArray[np.float64]
 
 # Apriorní nejistota tovární rotace pro doladění (víc by pohltilo i posun podél epipolár).
 ROTATION_PRIOR_DEG = 0.1
+# Moduly se zrcátkem: úhel z Hall kódu má chybu ~0,3–1° (ověřeno na tele snímku 00676).
+MIRROR_ROTATION_PRIOR_DEG = 1.0
 
 
 @dataclass(slots=True)
 class ModuleGeometry:
     camera: str
     K: F64  # 3×3, px plného rozlišení
-    R: F64 | None  # X_cam = R · X_A1 + t; None u modulů se zrcátkem (zatím nepodporováno)
+    R: F64 | None  # X_cam = R · X_A1 + t; None = bez pózy (zrcátko bez Hall kódu)
     t: F64 | None  # mm
     dist_center: F64  # (2,) px
     dist_norm: F64  # (2,) px
     dist_coeffs: F64  # k1..k5 radiálního polynomu v r²
+    mirror: bool = False  # póza z modelu zrcátka (méně jistá rotace)
 
     @property
     def has_pose(self) -> bool:
@@ -84,6 +93,7 @@ class ModuleGeometry:
                 "norm": self.dist_norm.tolist(),
                 "coeffs": self.dist_coeffs.tolist(),
             },
+            "mirror": self.mirror,
         }
 
     @classmethod
@@ -97,6 +107,7 @@ class ModuleGeometry:
             dist_center=np.asarray(dist["center"], np.float64),
             dist_norm=np.asarray(dist["norm"], np.float64),
             dist_coeffs=np.asarray(dist["coeffs"], np.float64),
+            mirror=bool(d.get("mirror", False)),
         )
 
 
@@ -106,8 +117,61 @@ def _mat3(m: Any) -> F64:
     )
 
 
-def read_geometry(data: bytes) -> dict[str, ModuleGeometry]:
-    """Geometrie všech modulů z LightHeaderů (LRI snímku nebo calibration.lri z lightcalu)."""
+def _vec3(p: Any) -> F64:
+    return np.array([p.x, p.y, p.z], np.float64)
+
+
+def mirror_angle(mapping: Any, hall: int) -> float:
+    """Úhel zrcátka [°] z Hall kódu: lineárně mezi kalibrovanými páry, mimo rozsah krajní
+    úsečkou."""
+    pairs = sorted((p.hall_code, p.angle) for p in mapping.actuator_angle_pair_vec)
+    h = np.array([p[0] for p in pairs], np.float64)
+    a = np.array([p[1] for p in pairs], np.float64)
+    if len(h) < 2:
+        raise ValueError("mirror calibration without hall/angle pairs")
+    if hall < h[0]:
+        return float(a[0] + (hall - h[0]) * (a[1] - a[0]) / (h[1] - h[0]))
+    if hall > h[-1]:
+        return float(a[-1] + (hall - h[-1]) * (a[-1] - a[-2]) / (h[-1] - h[-2]))
+    return float(np.interp(hall, h, a))
+
+
+def mirror_pose(mm: Any, hall: int) -> tuple[F64, F64]:
+    """(R, t) virtuální kamery modulu se zrcátkem vůči A1 (X_cam = R · X_A1 + t, mm)."""
+    ms = mm.mirror_system
+    orient = _mat3(ms.real_camera_orientation)  # sloupce = osy skutečné kamery v souř. A1
+    C = _vec3(ms.real_camera_location)
+    axis = _vec3(ms.rotation_axis)
+    axis /= np.linalg.norm(axis)
+    ang = np.radians(mirror_angle(mm.mirror_actuator_mapping, hall))
+    n = Rotation.from_rotvec(ang * axis).apply(_vec3(ms.mirror_normal_at_zero_degrees))
+    n /= np.linalg.norm(n)
+    # rovina zrcátka n·X = c
+    c = (
+        float(n @ _vec3(ms.point_on_rotation_axis))
+        + ms.distance_mirror_plane_to_point_on_rotation_axis
+    )
+    H = np.eye(3) - 2.0 * np.outer(n, n)
+    Cv = H @ C + 2.0 * c * n
+    best: tuple[float, F64] | None = None
+    for flip in ((-1.0, 1.0, 1.0), (1.0, -1.0, 1.0)):
+        R = (H @ orient @ np.diag(flip)).T
+        angle = float(Rotation.from_matrix(R).magnitude())
+        if best is None or angle < best[0]:
+            best = (angle, R)
+    assert best is not None
+    R = best[1]
+    return R, -R @ Cv
+
+
+def read_geometry(
+    data: bytes, halls: dict[str, int | None] | None = None
+) -> dict[str, ModuleGeometry]:
+    """Geometrie všech modulů z LightHeaderů (LRI snímku nebo calibration.lri z lightcalu).
+
+    `halls`: poloha zrcátek ve snímku (Hall kód podle modulu) – bez ní nemají moduly se zrcátkem
+    pózu.
+    """
     out: dict[str, ModuleGeometry] = {}
     for lh in iter_light_headers(data):
         for mc in lh.module_calibration:
@@ -120,6 +184,7 @@ def read_geometry(data: bytes) -> dict[str, ModuleGeometry]:
             K: F64 | None = None
             R: F64 | None = None
             t: F64 | None = None
+            mirror = False
             for pf in g.per_focus_calibration:
                 # K se v kalibraci s ostřením nemění (ověřeno), bere se první.
                 if K is None and pf.HasField("intrinsics"):
@@ -129,6 +194,10 @@ def read_geometry(data: bytes) -> dict[str, ModuleGeometry]:
                     if c.HasField("rotation") and c.HasField("translation"):
                         R = _mat3(c.rotation)
                         t = np.array([c.translation.x, c.translation.y, c.translation.z])
+                hall = (halls or {}).get(name)
+                if R is None and hall is not None and pf.extrinsics.HasField("moveable_mirror"):
+                    R, t = mirror_pose(pf.extrinsics.moveable_mirror, int(hall))
+                    mirror = True
             poly = g.distortion.polynomial
             if K is None or not poly.coeffs:
                 continue
@@ -142,6 +211,7 @@ def read_geometry(data: bytes) -> dict[str, ModuleGeometry]:
                 ),
                 dist_norm=np.array([poly.normalization.x, poly.normalization.y], np.float64),
                 dist_coeffs=np.array(list(poly.coeffs), np.float64),
+                mirror=mirror,
             )
     return out
 
@@ -259,7 +329,7 @@ class RefineStats:
 def refine_rotation(
     origin: ModuleGeometry, mod: ModuleGeometry, p_origin: F64, p_mod: F64
 ) -> tuple[ModuleGeometry, RefineStats] | None:
-    """Doladí rotaci modulu vůči A1 (malá korekce s priorem), translace zůstává tovární."""
+    """Doladí rotaci modulu vůči `origin` (malá korekce s priorem), translace zůstává tovární."""
     import cv2
 
     if len(p_origin) < 20 or mod.R is None:
@@ -272,7 +342,7 @@ def refine_rotation(
         return None
     p1, p2 = p_origin[inl], p_mod[inl]
     R0 = mod.R
-    sigma = np.radians(ROTATION_PRIOR_DEG)
+    sigma = np.radians(MIRROR_ROTATION_PRIOR_DEG if mod.mirror else ROTATION_PRIOR_DEG)
 
     def with_rot(d: F64) -> ModuleGeometry:
         return replace(mod, R=Rotation.from_rotvec(d).as_matrix() @ R0)
@@ -298,18 +368,22 @@ def calibrate_shot(
     geo: dict[str, ModuleGeometry],
     previews: dict[str, NDArray[np.floating[Any]]],
     full_width: int,
+    reference: str = "A1",
 ) -> tuple[dict[str, ModuleGeometry], dict[str, RefineStats]]:
-    """Doladí všechny moduly s pózou vůči A1 podle shod v náhledech (raw orientace)."""
+    """Doladí všechny moduly s pózou vůči referenci podle shod v náhledech (raw orientace).
+
+    Reference zůstává (A1 = počátek, B4 v tele režimech má pevnou tovární pózu vůči A1).
+    """
     t0 = time.perf_counter()
     out = dict(geo)
     stats: dict[str, RefineStats] = {}
-    origin = geo.get("A1")
-    if origin is None or "A1" not in previews:
+    origin = geo.get(reference)
+    if origin is None or not origin.has_pose or reference not in previews:
         return out, stats
     for cam, img in previews.items():
-        if cam == "A1" or cam not in geo or not geo[cam].has_pose:
+        if cam == reference or cam not in geo or not geo[cam].has_pose:
             continue
-        p1, p2 = match_features(previews["A1"], img, full_width)
+        p1, p2 = match_features(previews[reference], img, full_width)
         res = refine_rotation(origin, geo[cam], p1, p2)
         if res is not None:
             out[cam], stats[cam] = res

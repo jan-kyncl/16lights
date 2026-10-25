@@ -27,6 +27,37 @@ F32 = NDArray[np.float32]
 SCALE = 2
 FEATHER_PX = 96.0  # měkký okraj B modulu (px senzoru B)
 BASE_WEIGHT = 0.05  # váha zvětšeného základu tam, kde je B detail
+# Váha podle ostrosti: poměr r lokální energie jemných detailů modulu a zvětšeného základu
+# (√ energie). Moduly bývají různě zaostřené (tele 00204: C1 rozostřený, C5 ostrý), test duchů
+# na rozmazaném obrazu to nepozná a průměr rozmaže výsledek. Váha r^FOCUS_POWER, pod FOCUS_MIN 0.
+FOCUS_MIN = 0.8
+FOCUS_MAX = 3.0
+FOCUS_POWER = 4.0
+
+
+def detail_energy(y: F32) -> F32:
+    """Lokální energie detailů jasu v pásmu DoG σ 1–3 px plátna (okno σ 16 px).
+
+    Nejvyšší frekvence (pod σ 1) jsou hlavně šum modulu – odšuměný základ by pak vypadal
+    „neostře“ i proti rozostřenému modulu. Ověřeno na 00204: rozostřený C1 r = 0,60, C5 1,30.
+    """
+    b = np.asarray(cv2.GaussianBlur(y, (0, 0), 1.0) - cv2.GaussianBlur(y, (0, 0), 3.0), np.float32)
+    return np.asarray(cv2.GaussianBlur(b * b, (0, 0), 16.0), np.float32)
+
+
+def energy_floor(base_e: F32) -> float:
+    """Medián energie základu (podvzorkovaně, stejně na CPU i GPU): v plochých plochách pak
+    r ≈ 1 (šum modulu nepřeváží), v texturách rozhoduje ostrost."""
+    step = max(1, base_e.size // 4_000_000)
+    return float(np.percentile(base_e.ravel()[::step], 50)) + 1e-12
+
+
+def focus_weight(e_mod: F32, e_base: F32, floor: float) -> F32:
+    """Váha modulu podle ostrosti vůči základu; `floor` = energie šumu (ploché plochy → r ≈ 1)."""
+    r = np.sqrt((e_mod + floor) / (e_base + floor))
+    w = np.clip(r, 0.0, FOCUS_MAX) ** FOCUS_POWER
+    out: F32 = np.where(r < FOCUS_MIN, 0.0, w).astype(np.float32)
+    return out
 
 
 def unorient(arr: NDArray[Any], hold: Orientation | None) -> NDArray[Any]:
@@ -128,6 +159,8 @@ def build(
         cv2.resize(inv_full, (W * S, H * S), interpolation=cv2.INTER_LINEAR), np.float32
     )
     base_blur = np.asarray(cv2.GaussianBlur(canvas @ LUMA, (0, 0), 3.0), np.float32)
+    base_e = detail_energy(canvas @ LUMA)
+    e_floor = energy_floor(base_e)
     acc = canvas * BASE_WEIGHT
     wsum = np.full((H * S, W * S), BASE_WEIGHT, np.float32)
     small = (2080, round(2080 * H / W))
@@ -231,18 +264,20 @@ def build(
         wb = np.asarray(cv2.GaussianBlur(warped @ LUMA, (0, 0), 3.0), np.float32)
         sigma = np.sqrt(0.002 * np.maximum(base_blur, 0) + 1e-5) * 5.0
         agree = np.exp(-(((wb - base_blur) / sigma) ** 2))
+        focus = focus_weight(detail_energy((warped @ LUMA).astype(np.float32)), base_e, e_floor)
         # podíl saturace senzoru (develop.clip): saturace je v datech na úrovni zisku vinětace
         sat = np.asarray(cv2.remap(clip, mapx, mapy, cv2.INTER_LINEAR), np.float32) >= SATURATION
-        w = (feather * agree * inside * ~sat).astype(np.float32)
+        w = (feather * agree * focus * inside * ~sat).astype(np.float32)
         acc += w[..., None] * np.where(inside[..., None], warped, 0)
         wsum += w
         stats[mod.camera] = {
             **pstat,
             "coverage_pct": round(float(inside.mean()) * 100, 1),
             "used_pct": round(float((w > 0.5).mean()) * 100, 1),
+            "focus": round(float(np.median(focus[inside])), 2) if inside.any() else None,
             "color_gain": [round(float(g), 3) for g in cgain],
         }
-        del warped, mapx, mapy, wb, agree, w, edge, feather, inside
+        del warped, mapx, mapy, wb, agree, w, edge, feather, inside, focus
 
     for r0 in range(0, H * S, 1024):
         rows = slice(r0, min(H * S, r0 + 1024))

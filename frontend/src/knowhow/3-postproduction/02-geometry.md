@@ -26,7 +26,24 @@ Per module, in `LightHeader.module_calibration[].geometry`:
 | `K`           | 3 × 3 intrinsics in full-res pixels (f ≈ 3370 px, principal point near the centre). Identical for both calibrated focus distances (818 / 1500 mm), so we take the first |
 | `R, t`        | **extrinsics relative to A1**, translation in mm                                                                                                                        |
 | distortion    | radial polynomial: centre, normalisation (4160 px), 5 coefficients                                                                                                      |
-| `mirror_type` | 0 = none (A), 1 = has a canonical pose (B4, C5, C6), 2 = movable mirror described by `mirror_system` (not supported yet)                                                |
+| `mirror_type` | 0 = none (A), 1 = has a canonical pose (B4, C5, C6), 2 = movable mirror described by `mirror_system` (see below)                                                        |
+
+## Movable mirrors (B1–B3, B5, C1–C4)
+
+These modules look sideways into a mirror turned by an actuator. The calibration
+(`extrinsics.moveable_mirror`) gives the real camera (location, orientation: **columns = camera
+axes in A1 coordinates**), the mirror's rotation axis, a point on it, the plane offset, the normal at
+0° and a hall code → angle table. The shot records each module's hall code (`mirror_position`).
+
+`geometry.mirror_pose`: angle from the hall code (piecewise linear, end segments beyond), normal =
+rotate the 0° normal about the axis, plane `n·X = n·p + d`, then the **virtual camera** = reflection
+of the real one (`H = I − 2nnᵀ`). A reflection has det −1, so one image axis flips: the variant
+closer to A1's axes is taken (x for B1/B5/C1/C3, y for B2/B3/C2/C4).
+
+Checked 2026-10-25: against PnP from metric A depth (28 mm shots) the rotation agrees within
+0.06–0.6° and the translation within ~5–10 mm. At 70 mm (f ≈ 8300 px) 0.1° is still ~15 px, so the
+mirror modules get a 1° rotation prior in the online refinement (0.1° for fixed modules), and the
+depth step corrects the remaining shift along the epipolar lines.
 
 ## Conventions (verified, not documented anywhere)
 

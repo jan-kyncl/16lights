@@ -413,8 +413,9 @@ def export_shot(shot_id: str, body: Annotated[dict[str, Any], Body()]) -> Respon
     if hires and not (d / "frames" / "HIRES.npy").exists():
         raise HTTPException(409, "no high-resolution detail for this shot")
     data = None
-    if edits.f_number and edits.focus_distance and native.available(settings.native_url):
-        # refocus na GPU v nativní službě (CPU ~40 s)
+    refocus = bool(edits.f_number and edits.focus_distance)
+    if (refocus or hires) and native.available(settings.native_url):
+        # refocus na GPU v nativní službě (CPU ~40 s); 52 MP potřebuje ~7 GB, víc než kontejner
         assert settings.native_url is not None
         res = "hires" if hires else "full"
         body = {"format": fmt.value, "edits": edits.to_dict(), "resolution": res}

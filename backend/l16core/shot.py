@@ -23,6 +23,7 @@ import os
 import shutil
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -260,6 +261,24 @@ def process(
     return meta
 
 
+# Pole s ~2,2× delším ohniskem, ze kterého se skládá detail nad fúzí reference.
+DETAIL_ARRAY = {"A": "B", "B": "C"}
+# Nejbližší rovina hloubky pro ohnisko A (f ≈ 3375 px); delší ohnisko úměrně dál, aby krok
+# disparity mezi rovinami zůstal stejný (tele moduly stejně neostří tak blízko).
+DEPTH_NEAR_MM_A = 300.0
+F_PX_A = 3375.0
+
+
+def same_array(ref: str, cam: str) -> bool:
+    """Stejné pole modulů (A 28 mm, B 70 mm, C 150 mm) – stejné zorné pole jako reference."""
+    return cam[:1] == ref[:1]
+
+
+def depth_params(ref: geometry.ModuleGeometry) -> depth.DepthParams:
+    f = float(ref.K[0, 0])
+    return depth.DepthParams(near_mm=DEPTH_NEAR_MM_A * max(1.0, f / F_PX_A))
+
+
 def process_geometry(
     shot_dir: Path,
     lri: Any,
@@ -268,7 +287,7 @@ def process_geometry(
     reference: str,
 ) -> dict[str, Any] | None:
     """Náhledy modulů s pózou + doladěná kalibrace → geometry.json. None = nic k zarovnání."""
-    geo = calib.geometry()
+    geo = calib.geometry(info.mirror_halls())
     cams = [c for c in info.cameras if c.camera in geo and geo[c.camera].has_pose]
     if len(cams) < 2 or reference not in {c.camera for c in cams}:
         return None
@@ -286,7 +305,7 @@ def process_geometry(
         np.ascontiguousarray(pv, dtype="<f2").tofile(mod_dir / f"{c.camera}.f16")
         previews[c.camera] = pv
         sizes[c.camera] = [int(pv.shape[1]), int(pv.shape[0])]
-    refined, stats = geometry.calibrate_shot(geo, previews, full_width)
+    refined, stats = geometry.calibrate_shot(geo, previews, full_width, reference)
     data = {
         "reference": reference,
         "source": calib.mode,
@@ -322,7 +341,7 @@ def process_depth(
     person_mask: np.ndarray | None = None,
     refine: Callable[..., tuple[np.ndarray | None, dict[str, Any]]] | None = None,
 ) -> dict[str, Any] | None:
-    """Hloubka z A modulů (raw orientace reference) → depth.f16. None = málo modulů.
+    """Hloubka z modulů pole reference (A, v tele režimech B) → depth.f16. None = málo modulů.
 
     `refine(ref_img, inv, conf)` (nativní služba: Depth Pro) zpřesní 1/Z, nebo vrátí None, když
     mono hloubka nesouhlasí; čistý plane sweep se uloží vedle jako depth_sweep.f16.
@@ -336,17 +355,18 @@ def process_depth(
         return None
     ref = geo["reference"]
     mods = geo["modules"]
-    # zatím jen A pole: stejné zorné pole jako reference (B moduly mají jiné ohnisko)
-    cams = [c for c in mods if c != ref and c.startswith("A") and mods[c]["R"] is not None]
-    if not ref.startswith("A") or len(cams) < 2:
+    # pole reference: stejné ohnisko (ostatní pole mají jiné zorné pole)
+    cams = [c for c in mods if c != ref and same_array(ref, c) and mods[c]["R"] is not None]
+    if len(cams) < 2:
         return None
     full = (int(geo["full"][0]), int(geo["full"][1]))
     ref_geo = geometry.ModuleGeometry.from_dict(mods[ref])
+    params = depth_params(ref_geo)
     ref_img = load_module_preview(shot_dir, geo, ref)
     imgs = {c: load_module_preview(shot_dir, geo, c) for c in cams}
     geos = {c: geometry.ModuleGeometry.from_dict(mods[c]) for c in cams}
     shifts = {c: [0.0, 0.0] for c in cams}
-    quick = depth.DepthParams(planes=48)
+    quick = replace(params, planes=48)
     for _ in range(2):
         srcs = [(geos[c], imgs[c]) for c in cams]
         res = estimate(ref_geo, ref_img, srcs, full, quick)
@@ -368,9 +388,9 @@ def process_depth(
 
     final_srcs = [(geos[c], imgs[c]) for c in cams]
     if person_mask is not None:
-        res = estimate(ref_geo, ref_img, final_srcs, full, person_mask=person_mask)
+        res = estimate(ref_geo, ref_img, final_srcs, full, params, person_mask=person_mask)
     else:
-        res = estimate(ref_geo, ref_img, final_srcs, full)
+        res = estimate(ref_geo, ref_img, final_srcs, full, params)
     h, w = res.inv_depth.shape
     inv = res.inv_depth
     refined: dict[str, Any] | None = None
@@ -425,7 +445,7 @@ def process_fusion(
     depth_info: dict[str, Any],
     fuse_fn: Callable[..., fusion.FusionResult] = fusion.fuse,
 ) -> dict[str, Any] | None:
-    """Fúze barevných A modulů podle hloubky → frames/FUSED.npy + preview_fused.f16."""
+    """Fúze barevných modulů pole reference podle hloubky → frames/FUSED.npy + preview_fused.f16."""
     geo = load_geometry(shot_dir)
     meta_depth = shot_dir / "depth.f16"
     if geo is None or not meta_depth.exists():
@@ -435,7 +455,7 @@ def process_fusion(
     cams = [
         c
         for c in mods
-        if c != ref and c.startswith("A") and mods[c]["R"] is not None and not mods[c]["mono"]
+        if c != ref and same_array(ref, c) and mods[c]["R"] is not None and not mods[c]["mono"]
     ]
     if len(cams) < 1:
         return None
@@ -461,7 +481,7 @@ def process_fusion(
         else [
             c
             for c in mods
-            if c != ref and c.startswith("A") and mods[c]["R"] is not None and mods[c]["mono"]
+            if c != ref and same_array(ref, c) and mods[c]["R"] is not None and mods[c]["mono"]
         ]
     )
     mono = source(mono_cams[0]) if mono_cams else None
@@ -526,7 +546,7 @@ def process_hires(
     calib = calibration.Calibration(
         src.read_bytes(), calibration.match_device(devices_root, info.device_uid)
     )
-    allgeo = calib.geometry()
+    allgeo = calib.geometry(info.mirror_halls())
     ref = geo["reference"]
     by_cam = {c.camera: c for c in info.cameras}
     hold = Orientation[info.orientation] if info.orientation else None
@@ -535,9 +555,11 @@ def process_hires(
         c = by_cam[cam]
         return c.exposure_ms * c.analog_gain * (c.digital_gain or 1.0)
 
-    bcams = [c for c in by_cam if c.startswith("B") and c in allgeo]
+    # detail z pole s delším ohniskem: A → B (70 mm), B → C (150 mm)
+    detail_array = DETAIL_ARRAY.get(ref[0])
+    bcams = [c for c in by_cam if detail_array and c.startswith(detail_array) and c in allgeo]
     if not bcams:
-        raise ValueError("no 70 mm (B) modules in this shot")
+        raise ValueError(f"no {detail_array or 'longer-focal'} modules for detail in this shot")
     fused = shot_dir / "frames" / "FUSED.npy"
     base_disp = np.load(fused if fused.exists() else shot_dir / "frames" / f"{ref}.npy").astype(
         np.float32
@@ -629,7 +651,9 @@ def camera_details(shot_dir: Path, devices_root: Path) -> list[dict[str, Any]]:
                 "mirror_type": lh_mirror.get(cam),
                 "baseline_mm": None if g.t is None else [round(float(v), 1) for v in g.t],
             }
-            for cam, g in calib.geometry().items()
+            for cam, g in calib.geometry(
+                {c["camera"]: c.get("mirror_position") for c in meta["info"]["cameras"]}
+            ).items()
         }
         write_json(cache, calib_info)
 

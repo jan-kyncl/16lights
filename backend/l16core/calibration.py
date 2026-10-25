@@ -141,13 +141,16 @@ class Calibration:
                 return grid
         return lelr.vignetting_grid(self._lri_bytes, int(cam), hall_code)
 
-    def geometry(self) -> dict[str, ModuleGeometry]:
-        """Geometrie modulů: z lightcalu, jinak tovární data v hlavičce LRI."""
+    def geometry(self, halls: dict[str, int | None] | None = None) -> dict[str, ModuleGeometry]:
+        """Geometrie modulů: z lightcalu, jinak tovární data v hlavičce LRI.
+
+        `halls` = poloha zrcátek snímku (ShotInfo.mirror_halls()) → pózy modulů se zrcátkem.
+        """
         if self._calib_bytes is not None:
-            geo = read_geometry(self._calib_bytes)
+            geo = read_geometry(self._calib_bytes, halls)
             if geo:
                 return geo
-        return read_geometry(self._lri_bytes)
+        return read_geometry(self._lri_bytes, halls)
 
     def distortion(self, cam: CameraId) -> DistortionParams | None:
         if self.profile is not None:

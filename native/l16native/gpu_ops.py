@@ -41,6 +41,12 @@ def _np(t: torch.Tensor) -> F32:
     return a[0] if a.shape[0] == 1 else np.ascontiguousarray(a.transpose(1, 2, 0))
 
 
+def _detail_energy(y: torch.Tensor) -> torch.Tensor:
+    """≡ l16core/detail.py::detail_energy; y (1, H, W) → (H, W)."""
+    b = _gauss(y, 1.0) - _gauss(y, 3.0)
+    return _gauss(b * b, 16.0)[0]
+
+
 def _gauss(x: torch.Tensor, sigma: float) -> torch.Tensor:
     """Separabilní Gaussovo rozmazání (C, H, W)."""
     r = max(1, math.ceil(3 * sigma))
@@ -320,6 +326,8 @@ def build(
         _t(base_raw)[None], size=(H * S, W * S), mode="bicubic", align_corners=False
     )[0]
     base_blur = _gauss((canvas * LUMA).sum(0, keepdim=True), 3.0)[0]
+    base_e = _detail_energy((canvas * LUMA).sum(0, keepdim=True))
+    e_floor = cpu_detail.energy_floor(_np(base_e[None]))
     acc = canvas * cpu_detail.BASE_WEIGHT
     wsum = torch.full((H * S, W * S), cpu_detail.BASE_WEIGHT, device=DEV)
     small = (2080, round(2080 * H / W))
@@ -368,17 +376,27 @@ def build(
         wb = _gauss((warped * LUMA).sum(0, keepdim=True), 3.0)[0]
         sigma = torch.sqrt(0.002 * base_blur.clamp_min(0) + 1e-5) * 5.0
         agree = torch.exp(-(((wb - base_blur) / sigma) ** 2))
+        r = torch.sqrt(
+            (_detail_energy((warped * LUMA).sum(0, keepdim=True)) + e_floor) / (base_e + e_floor)
+        )
+        focus = torch.where(
+            r < cpu_detail.FOCUS_MIN,
+            torch.zeros_like(r),
+            r.clamp(0, cpu_detail.FOCUS_MAX) ** cpu_detail.FOCUS_POWER,
+        )
+        del r
         sat = _sample(_t(clip), mx, my, "bilinear", 0.0)[0] >= cpu_fusion.SATURATION
-        wgt = feather * agree * inside * ~sat
+        wgt = feather * agree * focus * inside * ~sat
         acc += wgt[None] * torch.where(inside[None], warped, torch.zeros_like(warped))
         wsum += wgt
         stats[mod.camera] = {
             **pstat,
             "coverage_pct": round(float(inside.float().mean()) * 100, 1),
             "used_pct": round(float((wgt > 0.5).float().mean()) * 100, 1),
+            "focus": round(float(focus[inside].median()), 2) if bool(inside.any()) else None,
             "color_gain": [round(float(g), 3) for g in cgain],
         }
-        del M, warped, mx, my, edge, feather, wb, agree, wgt
+        del M, warped, mx, my, edge, feather, wb, agree, wgt, focus
     result = acc / wsum[None]
     detail_pct = round(float(((wsum - cpu_detail.BASE_WEIGHT) > 0.5).float().mean()) * 100, 1)
     for r0 in range(0, H * S, 1024):

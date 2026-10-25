@@ -37,8 +37,17 @@ where the L16's ~52 MP comes from. None of them mirror the image.
    once**.
 4. **Colour matching**: per-channel gain from blurred overlap (B vs canvas), excluding clipped and dark
    areas. Gains came out between 0.89 and 1.05. The modules' colour responses differ and we use A1's CCM.
-5. **Weights**: feathered border (96 B px) × ghost test against the canvas × not clipped. The base
-   canvas keeps weight 0.05, so B detail wins wherever it is valid.
+5. **Weights**: feathered border (96 B px) × ghost test against the canvas × not clipped ×
+   **focus**. The base canvas keeps weight 0.05, so detail wins wherever it is valid.
+6. **Focus weight** (2026-10-25): modules are not equally sharp (tele 00204: C1 defocused, C5
+   sharp), and the ghost test on blurred images cannot see that, so the average went soft.
+   `r = √((E_mod + e)/(E_base + e))`, `E` = local energy of the DoG σ 1–3 band (σ 16 window), `e` =
+   median of the base energy (flat areas → r ≈ 1, module noise does not count as detail);
+   weight `r⁴` (capped at r = 3), 0 below r = 0.8. The finest band (< σ 1) is mostly noise and
+   made the denoised base look "soft" even against a defocused module.
+
+**Tele modes (70 / 150 mm, B4 reference)**: the same build runs B → C: the canvas is the B fusion,
+the detail comes from the six C modules (150 mm). See the Roadmap for the status.
 
 ## Results
 

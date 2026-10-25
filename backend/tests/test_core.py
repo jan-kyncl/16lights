@@ -315,3 +315,36 @@ def test_dynamic_range_before_refocus(monkeypatch: pytest.MonkeyPatch, tmp_path:
     data = export.render(tmp_path, e, export.ExportFormat.TIFF, refocus_fn=flat)
     out = np.asarray(Image.open(io.BytesIO(data)), np.float32)
     assert out.std(axis=(0, 1)).max() < 1.0
+
+
+def test_mirror_pose_reflects_side_camera() -> None:
+    from types import SimpleNamespace as NS
+
+    from l16core.geometry import mirror_angle, mirror_pose
+
+    def v(x: float, y: float, z: float) -> NS:
+        return NS(x=x, y=y, z=z)
+
+    # skutečná kamera v počátku se dívá do +x (sloupce = osy kamery), zrcátko pod 45° v x = 10
+    cols = np.array([[0, 0, -1], [0, 1, 0], [1, 0, 0]], np.float64).T  # x_c, y_c, z_c ve světě
+    m = NS(**{f"x{i}{j}": float(cols[i, j]) for i in range(3) for j in range(3)})
+    s = 1 / np.sqrt(2)
+    mm = NS(
+        mirror_system=NS(
+            real_camera_orientation=m,
+            real_camera_location=v(0, 0, 0),
+            rotation_axis=v(0, 1, 0),
+            point_on_rotation_axis=v(10, 0, 0),
+            distance_mirror_plane_to_point_on_rotation_axis=0.0,
+            mirror_normal_at_zero_degrees=v(-s, 0, s),
+        ),
+        mirror_actuator_mapping=NS(
+            actuator_angle_pair_vec=[NS(hall_code=100, angle=0.0), NS(hall_code=200, angle=10.0)]
+        ),
+    )
+    assert mirror_angle(mm.mirror_actuator_mapping, 150) == pytest.approx(5.0)
+    assert mirror_angle(mm.mirror_actuator_mapping, 300) == pytest.approx(20.0)  # extrapolace
+    R, t = mirror_pose(mm, 100)
+    assert np.linalg.det(R) == pytest.approx(1.0)
+    np.testing.assert_allclose(R[2], [0, 0, 1], atol=1e-9)  # virtuální kamera se dívá do +z
+    np.testing.assert_allclose(-R.T @ t, [10, 0, -10], atol=1e-9)  # střed = odraz za zrcátkem

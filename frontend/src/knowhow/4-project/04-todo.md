@@ -36,7 +36,19 @@ are 3× faster. Ordered by impact:
          luma, leave-one-out rms 0.22 EV (`l16core/exposure.py`), default for new shots, _Auto_ button
    - [ ] ForwardMatrix refit on a ColorChecker shot
    - [ ] 52 MP at night: B-module detail ghosts (doubled edges) on dark scenes
-6. [ ] **70 / 150 mm modes** (19 shots in the backup): B4 reference, C modules as detail
+6. [ ] **70 / 150 mm modes** (19 shots in the backup, B1–B5 + C1–C6, no A)
+   - [x] Mirror module poses from the calibration's mirror model (virtual camera by reflection)
+   - [x] Geometry refinement against the shot's reference (B4), depth + fusion from the B array
+         (noise −36…−80 % vs B4 alone), 52 MP detail from the C array
+   - [x] Focus weight in the detail build (defocused modules drop out); 52 MP export runs in the
+         native service (needs ~7 GB, more than the container)
+   - [x] vs. lux on 00676 (70 mm): same edge detail, 35 % less noise. On 00204 (150 mm) lux is
+         sharper (output sharpening + contrast) and ours shows ghosts where leaves moved
+   - [ ] Robust C ↔ C merge (sharpest module as reference, fine-scale ghost test between modules)
+   - [ ] Output sharpening (Lumen sharpens; we do not yet)
+   - [ ] Night tele (00284 moon): too few SIFT matches for the C pose → mirror model + image
+         correlation as a fallback
+   - [ ] 150 mm mode: crop to the zoomed field of view like Lumen
 7. [ ] **Depth as an output**: full resolution, GDepth and HEIC depth export (refocus in iPhone
        Photos), interactive parallax / 3D view in the browser
 8. [ ] **Learned L16 denoiser** (DGX Spark): Noise2Noise on aligned module and stack pairs
