@@ -22,14 +22,21 @@ log = structlog.get_logger()
 
 F32 = NDArray[np.float32]
 LUMA = np.array([0.2126, 0.7152, 0.0722], np.float32)
-SATURATION = 0.92  # nad tím (v jednotkách modulu) je kanál považovaný za přepálený
+SATURATION = 0.92  # podíl saturace senzoru (develop.clip), nad nímž je pixel přepálený
 
 
 @dataclass(slots=True)
 class FusionSource:
     geo: ModuleGeometry
-    rgb: F32  # (H, W, 3) raw orientace, plné rozlišení, 1.0 = saturace
+    rgb: F32  # (H, W, 3) raw orientace, plné rozlišení, 1.0 = saturace × zisk vinětace
     exposure: float  # expozice × zisk (relativní citlivost)
+    # (H, W) podíl saturace senzoru (develop.clip); None = saturace na 1.0 (bez vinětace)
+    clip: F32 | None = None
+
+    def clip_map(self) -> F32:
+        if self.clip is not None:
+            return self.clip
+        return np.asarray(self.rgb.max(axis=2) if self.rgb.ndim == 3 else self.rgb, np.float32)
 
 
 @dataclass(slots=True)
@@ -216,7 +223,8 @@ def fuse(
     ).astype(np.float32)
     inv_full = upsample_depth(inv_depth_small, conf_small, guide)
 
-    ref_sat = ref_rgb.max(axis=2) >= SATURATION
+    # saturace senzoru je v datech na úrovni zisku vinětace g (rohy až 3,8×), ne na 1.0
+    ref_sat = ref.clip_map() >= SATURATION
     acc = np.where(ref_sat[..., None], 0.0, ref_rgb).astype(np.float32)
     wsum = np.where(ref_sat, 0.0, 1.0).astype(np.float32)
     # odhad šumu reference pro test duchů: σ(x) ≈ sqrt(a·x + b) v jednotkách reference
@@ -232,6 +240,8 @@ def fuse(
         for r0 in range(0, h, chunk):
             rows = slice(r0, min(h, r0 + chunk))
             mapx[rows], mapy[rows] = _warp_maps(ref.geo, src.geo, inv_full, rows)
+
+        src_clip = src.clip_map()
 
         def sample(mx: F32, my: F32, img: F32 = src.rgb) -> F32:
             return np.asarray(
@@ -267,7 +277,10 @@ def fuse(
             flow_px = float(np.median(np.linalg.norm(flow, axis=2)))
             del gx, gy, fx, fy, flow
         inside = warped[..., 0] >= 0
-        sat = warped.max(axis=2) >= SATURATION
+        # mapa saturace lineárně (bikubika by na hraně přepalu překmitla pod práh)
+        sat = (
+            np.asarray(cv2.remap(src_clip, mapx, mapy, cv2.INTER_LINEAR), np.float32) >= SATURATION
+        )
         x = warped * gain
         # duchy: porovnání rozmazaného jasu s referencí, tolerance podle šumu
         x_blur = np.asarray(cv2.GaussianBlur(x @ LUMA, (0, 0), 2.0), np.float32)
@@ -301,6 +314,7 @@ def fuse(
         # mono A2: převod podle hloubky jako u barevných modulů, pak sloučení jasu
         mg = ref.exposure / mono.exposure
         mono_gray = (mono.rgb.mean(axis=2) if mono.rgb.ndim == 3 else mono.rgb).astype(np.float32)
+        mono_clip = mono.clip_map()
         mapx = np.empty((h, w), np.float32)
         mapy = np.empty((h, w), np.float32)
         for r0 in range(0, h, chunk):
@@ -330,7 +344,8 @@ def fuse(
             mapx = np.asarray(cv2.remap(mapx, fx, fy, cv2.INTER_LINEAR, borderMode=rm), np.float32)
             mapy = np.asarray(cv2.remap(mapy, fx, fy, cv2.INTER_LINEAR, borderMode=rm), np.float32)
             mw = msample(mapx, mapy)
-        valid = (mw >= 0) & (mw < SATURATION)
+        mclip = np.asarray(cv2.remap(mono_clip, mapx, mapy, cv2.INTER_LINEAR), np.float32)
+        valid = (mw >= 0) & (mclip < SATURATION)
         fused, mono_stats = merge_mono(fused, (mw * mg).astype(np.float32), valid)
     stats = {
         "modules": per_module,

@@ -21,6 +21,8 @@
    neighbours of a clipped pixel wrong channel ratios) and from 0.80 to 0.99 the colour after WB is
    blended towards its largest channel. Blown lamps come out white with a soft edge, no magenta /
    lavender rim. Mono modules are left alone.
+   The fraction map (before recovery) is returned as `Developed.clip` and is what the fusion and
+   the 52 MP build use to reject clipped pixels.
 7. **Orient** for display (180° sensor mount + IMU), not for geometry work.
 
 > Mono modules: `to_debayered_numpy(half_res=True)` returns **full resolution**, because there is

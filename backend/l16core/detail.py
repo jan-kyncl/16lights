@@ -104,12 +104,13 @@ def build(
     base_raw: F32,
     inv_small: F32,
     conf_small: F32,
-    modules: list[tuple[ModuleGeometry, F32, float]],
+    modules: list[tuple[ModuleGeometry, F32, float, F32]],
     ref_exposure: float,
     out: NDArray[np.float16],
     progress: Callable[[str, float], None] | None = None,
 ) -> dict[str, Any]:
-    """base_raw: fúze v raw orientaci (H, W, 3); modules: (geometrie, raw RGB, expozice).
+    """base_raw: fúze v raw orientaci (H, W, 3); modules: (geometrie, raw RGB, expozice,
+    podíl saturace develop.clip).
 
     Výsledek (raw orientace, SCALE× rozlišení) se zapisuje do `out` (H·S, W·S, 3) float16.
     """
@@ -134,7 +135,7 @@ def build(
     Kinv = np.linalg.inv(ref.K)
     stats: dict[str, Any] = {}
 
-    for n, (mod, raw, exposure) in enumerate(modules):
+    for n, (mod, raw, exposure, clip) in enumerate(modules):
         if progress:
             progress(f"detail {mod.camera}", 0.1 + 0.8 * n / max(1, len(modules)))
         gain = ref_exposure / exposure
@@ -230,7 +231,8 @@ def build(
         wb = np.asarray(cv2.GaussianBlur(warped @ LUMA, (0, 0), 3.0), np.float32)
         sigma = np.sqrt(0.002 * np.maximum(base_blur, 0) + 1e-5) * 5.0
         agree = np.exp(-(((wb - base_blur) / sigma) ** 2))
-        sat = warped.max(axis=2) >= SATURATION * gain * float(cgain.max())
+        # podíl saturace senzoru (develop.clip): saturace je v datech na úrovni zisku vinětace
+        sat = np.asarray(cv2.remap(clip, mapx, mapy, cv2.INTER_LINEAR), np.float32) >= SATURATION
         w = (feather * agree * inside * ~sat).astype(np.float32)
         acc += w[..., None] * np.where(inside[..., None], warped, 0)
         wsum += w

@@ -202,7 +202,8 @@ def fuse(
     inv_full = _t(cpu_fusion.upsample_depth(inv_depth_small, conf_small, guide))[0]
     R = _t(ref_np)
     ref_luma = (R * LUMA).sum(0)
-    ref_sat = R.max(0).values >= cpu_fusion.SATURATION
+    # saturace senzoru je v datech na úrovni zisku vinětace (develop.clip), ne na 1.0
+    ref_sat = _t(ref.clip_map())[0] >= cpu_fusion.SATURATION
     acc = torch.where(ref_sat[None], torch.zeros_like(R), R)
     wsum = (~ref_sat).float()
     ref_blur = _gauss(ref_luma[None], 2.0)[0]
@@ -225,7 +226,7 @@ def fuse(
             warped = _sample(S, mx, my, interp, -1.0)
             flow_px = float(np.median(np.linalg.norm(fl, axis=2)))
         inside = warped[0] >= 0
-        sat = warped.max(0).values >= cpu_fusion.SATURATION
+        sat = _sample(_t(src.clip_map()), mx, my, "bilinear", 0.0)[0] >= cpu_fusion.SATURATION
         x = warped * gain
         x_blur = _gauss((x * LUMA).sum(0, keepdim=True), 2.0)[0]
         sigma = torch.sqrt(0.002 * ref_blur.clamp_min(0) + 1e-5) * ghost_sigma
@@ -273,7 +274,8 @@ def fuse(
             )
             mx, my = _compose_flow(mx, my, fl)
             mw = _sample(M, mx, my, interp, -1.0)
-        valid = (mw[0] >= 0) & (mw[0] < cpu_fusion.SATURATION)
+        mclip = _sample(_t(mono.clip_map()), mx, my, "bilinear", 0.0)[0]
+        valid = (mw[0] >= 0) & (mclip < cpu_fusion.SATURATION)
         fused, mono_stats = cpu_fusion.merge_mono(fused, _np(mw * gain), valid.cpu().numpy())
         del M, mw, mx, my
     stats = {
@@ -299,7 +301,7 @@ def build(
     base_raw: F32,
     inv_small: F32,
     conf_small: F32,
-    modules: list[tuple[ModuleGeometry, F32, float]],
+    modules: list[tuple[ModuleGeometry, F32, float, F32]],
     ref_exposure: float,
     out: NDArray[np.float16],
     progress: Callable[[str, float], None] | None = None,
@@ -325,7 +327,7 @@ def build(
     q4 = (W * S // 4, H * S // 4)
     canvas_g = _gray8(canvas, lum_scale, q4)
     stats: dict[str, Any] = {}
-    for n, (mod, raw, exposure) in enumerate(modules):
+    for n, (mod, raw, exposure, clip) in enumerate(modules):
         if progress:
             progress(f"detail {mod.camera}", 0.1 + 0.8 * n / max(1, len(modules)))
         gain = ref_exposure / exposure
@@ -366,7 +368,7 @@ def build(
         wb = _gauss((warped * LUMA).sum(0, keepdim=True), 3.0)[0]
         sigma = torch.sqrt(0.002 * base_blur.clamp_min(0) + 1e-5) * 5.0
         agree = torch.exp(-(((wb - base_blur) / sigma) ** 2))
-        sat = warped.max(0).values >= cpu_fusion.SATURATION * gain * float(cgain.max())
+        sat = _sample(_t(clip), mx, my, "bilinear", 0.0)[0] >= cpu_fusion.SATURATION
         wgt = feather * agree * inside * ~sat
         acc += wgt[None] * torch.where(inside[None], warped, torch.zeros_like(warped))
         wsum += wgt

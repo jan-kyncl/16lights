@@ -5,6 +5,15 @@ whole repo: `backend/pyproject.toml` is the source, `native/pyproject.toml` and
 `frontend/package.json` must match (checked by a test). Every shot records the version that
 processed it (`meta.json` → `version`), shown in the editor's info panel.
 
+## Unreleased
+
+- **Fusion saturation against the sensor's saturation**: `develop` returns a clip map
+  `max(rgb) / g` (vignetting gain `g`), warped with each module; the fusion, mono A2 and the 52 MP
+  build reject pixels at ≥ 0.92 of it (CPU and GPU). The old `max(rgb) ≥ 0.92` test dropped
+  10–34 % of A3–A5 pixels on daylight shots (bright areas lifted by the vignetting gain), so those
+  areas came from A1 alone. On the 15 library shots: noise in bright smooth areas −15 % median (up
+  to −52 %), mean module weight 5.4 → 6.5, sharpness unchanged. Reprocess shots to apply.
+
 ## 0.3.0 – 2026-10-25
 
 Local tone mapping and a comparison tool.

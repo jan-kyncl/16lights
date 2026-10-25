@@ -153,7 +153,7 @@ def test_look_keeps_neutrals_and_hue_order() -> None:
 
 
 def test_recover_highlights_to_neutral() -> None:
-    from l16core.develop import recover_highlights
+    from l16core.develop import clip_fraction, recover_highlights
 
     wb = (2.0, 1.0, 1.6)
     # G saturovaný (při zisku vinětace 2 je saturace na 2.0), R a B pod saturací
@@ -161,7 +161,7 @@ def test_recover_highlights_to_neutral() -> None:
     rgb = np.tile(np.array([0.2, 0.5, 0.3], dtype=np.float32), (1, 24, 1))
     rgb[0, 0] = (0.6, 2.0, 0.9)
     gain = np.full((1, 24), 2.0, dtype=np.float32)
-    out = recover_highlights(rgb, gain, wb)
+    out = recover_highlights(rgb, clip_fraction(rgb, gain), wb)
     u = out[0, 0] * np.asarray(wb)
     assert np.allclose(u, u.max())  # po WB neutrální, jas z nejvyššího kanálu
     np.testing.assert_array_equal(out[0, 20], rgb[0, 20])  # daleko od saturace beze změny

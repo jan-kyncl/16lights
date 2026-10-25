@@ -29,6 +29,7 @@ class Quality(StrEnum):
 class Developed:
     camera: str
     rgb: F32  # (H, W, 3) lineární kamerové RGB, 1.0 = saturace senzoru (× zisk vinětace)
+    clip: F32  # (H, W) podíl saturace senzoru max(rgb) / g (před stažením přepalů), 1.0 = přepal
     color: ColorParams
     calibration_mode: str
     vignetting: bool
@@ -52,7 +53,14 @@ def vignetting_gain(vig: NDArray[np.float32] | None, shape: tuple[int, int]) -> 
     return gain
 
 
-def recover_highlights(rgb: F32, gain: F32, wb: tuple[float, float, float], radius: int = 3) -> F32:
+def clip_fraction(rgb: F32, gain: F32) -> F32:
+    """Podíl saturace senzoru v každém pixelu: nejvyšší kanál / zisk vinětace."""
+    mx = rgb.max(axis=2) if rgb.ndim == 3 else rgb
+    out: F32 = (mx / gain).astype(np.float32)
+    return out
+
+
+def recover_highlights(rgb: F32, frac: F32, wb: tuple[float, float, float], radius: int = 3) -> F32:
     """Přepal do neutrální: blízko saturace kteréhokoli kanálu se barva (po WB) stáhne k nejvyšší
     hodnotě kanálů. Nahrazuje tvrdý ořez v tónování, který nevěděl o vinětaci (saturace je
     rgb = g, ne 1.0) a nechával na okraji přepalu barevné lemy.
@@ -60,7 +68,6 @@ def recover_highlights(rgb: F32, gain: F32, wb: tuple[float, float, float], radi
     Mapa saturace se roztáhne o `radius` px: demozaika dopočítá sousedům přepalu kanály
     z ořezaných hodnot, takže mají chybný poměr kanálů, i když samy saturované nejsou.
     """
-    frac = rgb.max(axis=2) / gain
     if float(frac.max()) < CLIP_START:
         return rgb
     k = 2 * radius + 1
@@ -124,11 +131,12 @@ def develop(
     )
     rgb = (rgb / np.float32(img.white_level)).astype(np.float32)
     color = color_params(img.color_profiles, lri.metadata.awb_gains)
+    clip = clip_fraction(rgb, vignetting_gain(vig, rgb.shape[:2]))
     if rgb.ndim == 3 and not img.sensor_model.name.endswith("MONO"):
-        gain = vignetting_gain(vig, rgb.shape[:2])
-        rgb = recover_highlights(rgb, gain, color.wb, 2 if quality == Quality.PREVIEW else 3)
+        rgb = recover_highlights(rgb, clip, color.wb, 2 if quality == Quality.PREVIEW else 3)
     if oriented:
         rgb = orient(rgb, lri.metadata.orientation)
+        clip = orient(clip, lri.metadata.orientation)
     log.info(
         "develop",
         camera=cam.name,
@@ -143,6 +151,7 @@ def develop(
     return Developed(
         camera=cam.name,
         rgb=rgb,
+        clip=clip,
         color=color,
         calibration_mode=calib.mode,
         vignetting=vig is not None,

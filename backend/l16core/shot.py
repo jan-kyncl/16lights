@@ -448,6 +448,7 @@ def process_fusion(
             geometry.ModuleGeometry.from_dict(mods[cam]),
             dev.rgb,
             c.exposure_ms * c.analog_gain * (c.digital_gain or 1.0),
+            dev.clip,
         )
 
     dw, dh = int(depth_info["width"]), int(depth_info["height"])
@@ -548,7 +549,7 @@ def process_hires(
     for c in bcams:
         step(f"develop {c}", 0.05)
         dev = develop(lri, lri.image_for_camera(c), calib, Quality.FULL, oriented=False)
-        modules.append((allgeo[c], dev.rgb, exposure(c)))
+        modules.append((allgeo[c], dev.rgb, exposure(c), dev.clip))
     H, W = base_raw.shape[:2]
     S = detail.SCALE
     tmp = shot_dir / "frames" / "HIRES.raw.npy"

@@ -26,8 +26,9 @@ are 3× faster. Ordered by impact:
          maximum (the 99.99 % scaling clipped G only → magenta in raw developers)
    - [x] Highlights to neutral in develop, from the true saturation level (vignetting gain map),
          dilated; tone clip at 1.0 removed (fusion HDR above 1.0 now reaches the Highlights slider)
-   - [ ] Fusion saturation test still assumes 1.0 (`fusion.SATURATION`, also `gpu_ops`): compare
-         against the vignetting gain map of each module (corners are lifted up to 3.8×)
+   - [x] Fusion saturation test against the sensor's saturation (`develop.clip` = max / vignetting
+         gain, warped with each module; fusion, mono and 52 MP, CPU + GPU). The old `≥ 0.92` test
+         dropped 10–34 % of A3–A5 pixels on daylight shots
    - [x] **L16 look**: own HueSatMap (36×8) + tone curve fitted on 171 camera JPEG ↔ RAW pairs
          (`tools/look/`, held-out 8-bit MAE 6.3), default in the editor (L16 camera / Linear), embedded
          as a DNG profile. Not verified in Adobe software yet (Core Image ignores profile tags)

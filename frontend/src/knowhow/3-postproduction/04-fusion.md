@@ -33,8 +33,12 @@ All in the reference's raw sensor orientation, full resolution, linear camera RG
    - `1 / gain`: the longer exposure has better SNR, so weight 2 for the other A modules,
    - **ghost test**: `exp(−((blur(src) − blur(ref)) / σ)²)` with a noise-based σ. Occlusions,
      motion and misalignment drop out,
-   - **saturation**: pixels at ≥ 0.92 of the module's range are excluded. The reference is excluded
-     in its own clipped pixels too.
+   - **saturation**: pixels at ≥ 0.92 of the *sensor's* saturation are excluded, tested on the
+     `develop` clip map `max(rgb) / g` (vignetting gain `g`, warped bilinearly with the module), not
+     on the data value. The reference is excluded in its own clipped pixels too. Until 2026-10-25
+     the test was `max(rgb) ≥ 0.92`, which rejected bright but unclipped pixels lifted by the
+     vignetting gain: 10–34 % of A3–A5 on daylight shots, so bright areas came from A1 alone.
+     The same clip map is used for mono A2 and for the B modules of the 52 MP build.
 6. Weighted mean, in the reference's scale. Mono A2 is not used yet.
 
 ## Merge and denoise (`l16core/merge.py`, GPU `native/l16native/gpu_merge.py`, 2026-10-22)
