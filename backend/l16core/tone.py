@@ -101,6 +101,7 @@ class Edits:
     shadows: float = 0.0  # -1..1 (EV ve stínech)
     saturation: float = 0.0  # -1..1
     dynamic_range: float = 0.0  # 0..1 lokální komprese (stíny nahoru, světla dolů), detail zůstane
+    sharpen: float = 0.5  # 0..1 doostření (sharpen_gain), v náhledu i exportu na pixely obrazu
     focus_distance: float | None = None  # m, M3
     f_number: float | None = None  # M3
     flip_h: bool = False  # zrcadlení vodorovně (geometrie, ne tón)
@@ -400,6 +401,29 @@ def base_gain(base: F32, strength: float, mean: float | None = None) -> F32:
     d = base - np.float32(m)
     r = np.float32(BASE_RANGE)
     out: F32 = np.exp2(np.float32(strength) * (r * np.tanh(d / r) - d)).astype(np.float32)
+    return out
+
+
+# Doostření: zisk jasu z poměru jasu k jeho rozmazání (binomické jádro 5×5, σ = 1 px), tedy
+# unsharp mask v log2 jasu. Zisk je skalár na pixel (odstín zůstane) a jde před tónování, takže ho
+# shader spočítá z textury (9 bilineárních vzorků ≡ jádro 5×5). Šum se nedoostřuje (práh na
+# |odchylku|), halo omezuje tanh. Musí odpovídat tone.frag::sharpGain.
+SHARP_LUMA = np.array([0.25, 0.5, 0.25], dtype=np.float32)  # kamerové RGB, jen poměr
+SHARP_EPS = 0.01  # tlumí stíny, kde log poměr zesiluje šum
+SHARP_THRESH = 0.07  # EV; pod ním se nedoostřuje (šum), plně od 2× prahu
+SHARP_RANGE = 0.5  # EV, měkký strop odchylky (halo kolem kontrastních hran)
+SHARP_MAX = 2.0  # zesílení odchylky při sharpen = 1
+
+
+def sharpen_gain(cam_rgb: F32, strength: float) -> F32:
+    """Zisk doostření (H, W) pro kamerové lineární RGB."""
+    y = cam_rgb.astype(np.float32) @ SHARP_LUMA + np.float32(SHARP_EPS)
+    k = np.array([1, 4, 6, 4, 1], dtype=np.float32) / 16.0
+    blur = cv2.sepFilter2D(y, -1, k, k, borderType=cv2.BORDER_REPLICATE)
+    d = np.log2(y / np.maximum(blur, 1e-6))
+    d *= _smoothstep(SHARP_THRESH, 2.0 * SHARP_THRESH, np.abs(d))
+    r = np.float32(SHARP_RANGE)
+    out: F32 = np.exp2(np.float32(strength * SHARP_MAX) * r * np.tanh(d / r)).astype(np.float32)
     return out
 
 

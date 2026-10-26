@@ -49,6 +49,7 @@ const UNIFORMS = [
   "uBase",
   "uDynRange",
   "uBaseMean",
+  "uSharpen",
   "uLookOn",
   "uLookTable",
   "uLookCurve",
@@ -350,6 +351,7 @@ export class Renderer {
       gl.uniform1f(this.loc.uBaseMean, this.baseMean);
       gl.activeTexture(gl.TEXTURE0);
     }
+    gl.uniform1f(this.loc.uSharpen, e.sharpen);
     const lookOn = e.look !== "none" && this.lookTex !== null && this.lookCurve !== null;
     gl.uniform1i(this.loc.uLookOn, lookOn ? 1 : 0);
     if (lookOn && this.lookCurve) {

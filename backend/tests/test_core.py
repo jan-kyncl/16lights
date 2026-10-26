@@ -317,6 +317,21 @@ def test_dynamic_range_before_refocus(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert out.std(axis=(0, 1)).max() < 1.0
 
 
+def test_sharpen_gain_edges_not_noise() -> None:
+    from l16core.tone import sharpen_gain
+
+    rng = np.random.default_rng(0)
+    img = np.full((32, 64, 3), 0.2, np.float32)
+    img[:, 32:] = 0.4  # hrana (1 EV)
+    np.testing.assert_array_equal(sharpen_gain(img, 0.0), 1.0)  # slider 0 = identita
+    g = sharpen_gain(img, 1.0)
+    assert g[:, 31].mean() < 0.9 and g[:, 32].mean() > 1.1  # tmavá strana dolů, světlá nahoru
+    np.testing.assert_allclose(g[:, :28], 1.0)  # mimo hranu beze změny
+    # šum pod prahem (≈ 1 %) se nedoostřuje
+    noisy = img * (1 + 0.01 * rng.standard_normal(img.shape[:2]))[..., None].astype(np.float32)
+    assert np.abs(sharpen_gain(noisy, 1.0)[:, :28] - 1.0).max() < 0.01
+
+
 def test_mirror_pose_reflects_side_camera() -> None:
     from types import SimpleNamespace as NS
 

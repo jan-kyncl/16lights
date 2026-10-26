@@ -7,6 +7,9 @@ processed it (`meta.json` → `version`), shown in the editor's info panel.
 
 ## Unreleased
 
+- **Sharpening** slider (`edits.sharpen`, 0–1, default 0.5): unsharp mask in log luminance
+  (σ 1 px, noise threshold, halo cap), the same gain in the shader and the export. On tele 00204 at
+  full strength the edge contrast matches lux. Off with refocus and for DNG.
 - **Tele modes (70 / 150 mm)**: mirror module poses, depth and fusion from the B array (B4
   reference), 52 MP detail from the C array with focus weights.
 - **C mosaic**: C modules are warped by a dominant-plane homography instead of depth + flow (the

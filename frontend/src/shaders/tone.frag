@@ -17,6 +17,8 @@ uniform float uSaturation;
 uniform highp sampler2D uBase;
 uniform float uDynRange;   // 0 = vypnuto
 uniform float uBaseMean;
+// Doostření (tone.py::sharpen_gain): 0 = vypnuto
+uniform float uSharpen;
 // Vzhled (tone.py::Look): HueSatMap jako RGBA32F (x = odstín, y = sytost) a tónová křivka
 uniform bool uLookOn;
 uniform highp sampler2D uLookTable;
@@ -178,6 +180,27 @@ float baseGain(vec2 uv) {
   return exp2(uDynRange * (R * tanh(d / R) - d));
 }
 
+// zisk doostření (≡ tone.py::sharpen_gain) na texelech dané textury: binomické jádro 5×5 jako
+// 3×3 bilineárních vzorků (váhy 1 a 4 sousedních texelů → posun 1,2 texelu, váha 5)
+const vec3 SHARP_LUMA = vec3(0.25, 0.5, 0.25);
+float sharpGain(sampler2D tex, vec2 uv) {
+  if (uSharpen <= 0.0) return 1.0;
+  const float EPS = 0.01, THRESH = 0.07, RANGE = 0.5, MAXK = 2.0;
+  vec2 px = 1.2 / vec2(textureSize(tex, 0));
+  float y = dot(texture(tex, uv).rgb, SHARP_LUMA) + EPS;
+  float blur = 0.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      float w = (i == 0 ? 6.0 : 5.0) * (j == 0 ? 6.0 : 5.0);
+      blur += w * dot(texture(tex, uv + vec2(i, j) * px).rgb, SHARP_LUMA);
+    }
+  }
+  blur = blur / 256.0 + EPS;
+  float d = log2(y / max(blur, 1e-6));
+  d *= smoothstep(THRESH, 2.0 * THRESH, abs(d));
+  return exp2(uSharpen * MAXK * RANGE * tanh(d / RANGE));
+}
+
 vec3 refocus(vec2 uv) {
   vec2 tsize = vec2(textureSize(uImage, 0));
   float width = max(tsize.x, tsize.y);
@@ -264,8 +287,8 @@ void main() {
   vec2 hr = (vUv - uHiresRect.xy) / max(uHiresRect.zw, vec2(1e-6));
   if (uCocScale > 0.0) lin = refocus(vUv);  // zisk vrstvy už po vzorcích
   else if (uHiresRect.z > 0.0 && all(greaterThanEqual(hr, vec2(0.0))) && all(lessThanEqual(hr, vec2(1.0))))
-    lin = texture(uHires, hr).rgb * baseGain(vUv);
-  else lin = texture(uImage, vUv).rgb * baseGain(vUv);
+    lin = texture(uHires, hr).rgb * baseGain(vUv) * sharpGain(uHires, hr);
+  else lin = texture(uImage, vUv).rgb * baseGain(vUv) * sharpGain(uImage, vUv);
   outColor = vec4(tone(lin), 1.0);
 
   if (uOverlay > 0) {

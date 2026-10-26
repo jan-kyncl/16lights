@@ -28,6 +28,7 @@ from l16core.tone import (
     base_gain,
     eval_curve,
     load_look,
+    sharpen_gain,
     to_uint8,
     to_uint16,
     wb_gains,
@@ -70,6 +71,10 @@ def render(
     else:
         rgb, color = shot.load_full(shot_dir, edits.source)
     tone_edits = edits
+    refocused = not hires and bool(edits.f_number and edits.focus_distance)
+    if edits.sharpen > 0 and fmt != ExportFormat.DNG and not refocused:
+        # jako v náhledu: z obrazu před tónováním, s refocusem vypnuté (doostřil by bokeh)
+        rgb = rgb * sharpen_gain(rgb, edits.sharpen)[..., None]
     if edits.dynamic_range > 0 and fmt != ExportFormat.DNG:
         # stejná vrstva jako v náhledu (rozměr náhledu), bilineárně zvětšená jako textura v GL;
         # zisk se aplikuje už tady, před refocusem: vrstva je z ostrého obrazu a po refocusu by
@@ -80,7 +85,7 @@ def render(
         base = np.asarray(cv2.resize(small, size, interpolation=cv2.INTER_LINEAR), np.float32)
         rgb = rgb * base_gain(base, edits.dynamic_range, base_mean)[..., None]
         tone_edits = replace(edits, dynamic_range=0.0)
-    if not hires and edits.f_number and edits.focus_distance:
+    if refocused and edits.f_number and edits.focus_distance:
         inv = shot.load_depth_display(shot_dir, (rgb.shape[1], rgb.shape[0]))
         if inv is not None:
             f_eq = float(shot.load_meta(shot_dir)["info"].get("focal_length_mm") or 35)

@@ -121,6 +121,25 @@ strength made the match worse (MAE 9.2 → 9.4 at 0.15 → 10.2 at 0.5), the cam
 - Trade-off: strong fine texture (±10 %) in extreme zones is partly treated as an edge and
   compressed with the base (about half of its amplitude at full strength).
 
+### Sharpening (`edits.sharpen`)
+
+Lumen sharpens its output and we did not: on tele 00204, lux had twice our edge contrast
+(Laplacian at edges 25 vs 12.5). Default 0.5 (also for edits saved before the slider).
+
+- **Gain**: unsharp mask in log2 luminance. `y = 0.25 R + 0.5 G + 0.25 B + 0.01` (camera RGB, the
+  offset damps shadows), `d = log2(y / blur(y))` with a 5×5 binomial kernel (σ = 1 px),
+  `d · smoothstep(0.07, 0.14, |d|)` (noise is not sharpened), then
+  `gain = 2^(2 s · 0.5 · tanh(d / 0.5))` (halo cap). A per-pixel scalar on the linear camera RGB
+  before tone, so hue stays.
+- **Scale = pixels of the displayed image**: the shader computes it on the texels of the texture it
+  shows (preview, or the 52 MP region past 100 %; the 5×5 kernel is 3×3 bilinear taps at ±1.2
+  texel), export on the output pixels. At 1:1 on the 52 MP detail preview and export match;
+  zoomed out, the preview shows sharpening of the preview pixels. Shader ↔ `tone.py` gain max
+  0.0025 (desktop GL readback, 2026-10-26).
+- Off with refocus (it would sharpen the bokeh) and for DNG.
+- 00204 hires, strength 1: edge Laplacian 12.5 → 25.8 (lux 25.3), noise 2.39 → 2.69 (lux 1.95);
+  threshold 0.04 gave 3.37, 0.10 cut the edges to 23.7.
+
 ### Auto exposure (`meta.auto_exposure`)
 
 The camera exposes the reference module below its own preview exposure (ViewPreferences

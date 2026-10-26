@@ -48,7 +48,7 @@ are 3× faster. Ordered by impact:
          fine-scale ghost test, coverage blending, C6 (mono) excluded
    - [ ] 00204: pale veil and seam behind the distant pine; 00676: doubled near trunks at module
          edges
-   - [ ] Output sharpening (Lumen sharpens; we do not yet)
+   - [x] Output sharpening (`edits.sharpen`, shader + export, default 0.5)
    - [ ] Night tele (00284 moon): too few SIFT matches for the C pose → mirror model + image
          correlation as a fallback
    - [ ] 150 mm mode: crop to the zoomed field of view like Lumen

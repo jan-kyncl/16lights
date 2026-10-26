@@ -29,6 +29,7 @@ export interface Edits {
   shadows: number;
   saturation: number;
   dynamic_range: number; // 0..1 lokální tone mapping
+  sharpen: number; // 0..1 doostření (tone.py::sharpen_gain)
   focus_distance: number | null;
   f_number: number | null;
   flip_h: boolean;
@@ -57,6 +58,7 @@ export const DEFAULT_EDITS: Edits = {
   shadows: 0,
   saturation: 0,
   dynamic_range: 0,
+  sharpen: 0.5,
   focus_distance: null,
   f_number: null,
   flip_h: false,

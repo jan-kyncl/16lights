@@ -14,7 +14,8 @@ type SliderKey =
   | "highlights"
   | "shadows"
   | "saturation"
-  | "dynamic_range";
+  | "dynamic_range"
+  | "sharpen";
 
 // Popisek = klíč slovníku stejného jména.
 const SLIDERS: [SliderKey, number, number, number][] = [
@@ -26,6 +27,7 @@ const SLIDERS: [SliderKey, number, number, number][] = [
   ["shadows", -1, 1, 0.01],
   ["saturation", -1, 1, 0.01],
   ["dynamic_range", 0, 1, 0.01],
+  ["sharpen", 0, 1, 0.01],
 ];
 
 export async function renderEditor(root: HTMLElement, shotId: string): Promise<void> {
