@@ -1,4 +1,4 @@
-import { api, DEFAULT_EDITS, type Edits, type ShotMeta } from "./api";
+import { api, DEFAULT_EDITS, NOMINAL_FOCAL, type Edits, type ShotMeta, zoomFor } from "./api";
 import { download, h, toast } from "./dom";
 import { langSwitch, t, warningText } from "./i18n";
 import { Renderer, screenToTexture } from "./renderer";
@@ -45,7 +45,12 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
   const autoEv = meta.auto_exposure?.ev ?? 0;
   // tele: černý bod proti rozptýlenému světlu v optice (exposure.py::auto_black)
   const autoBlack = meta.auto_exposure?.black ?? 0;
-  const toneDefaults: Edits = { ...DEFAULT_EDITS, exposure: autoEv, black: autoBlack };
+  const toneDefaults: Edits = {
+    ...DEFAULT_EDITS,
+    exposure: autoEv,
+    black: autoBlack,
+    zoom: zoomFor(meta.info.focal_length_mm, meta.reference_camera),
+  };
   let edits: Edits = { ...toneDefaults, ...saved };
   if (edits.source === "fused" && !meta.fusion) edits = { ...edits, source: "single" };
   const firstPixels = edits.source === "fused" ? await api.preview(shotId, "fused") : pixels;
@@ -58,7 +63,8 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
   renderer.setImage(firstPixels, meta.preview.width, meta.preview.height);
   if (look) renderer.setLook(look);
   renderer.setRotation(edits.rotate);
-  const displayWidth = () => (edits.rotate % 180 ? meta.full.height : meta.full.width);
+  const displayWidth = () =>
+    Math.round((edits.rotate % 180 ? meta.full.height : meta.full.width) / Math.max(1, edits.zoom));
 
   // Základní vrstva pro Dynamic range: stáhne se, až když je potřeba (6 MB), zvlášť pro zdroj.
   let baseFor: Edits["source"] | null = null;
@@ -459,6 +465,28 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
   };
   strRange.addEventListener("input", () => setStraighten(Number(strRange.value)));
   strRange.addEventListener("dblclick", () => setStraighten(0));
+  // Ohnisko: středový ořez jako JPEG z foťáku (výchozí = ohnisko z hlavičky, zoomFor)
+  const nominal = NOMINAL_FOCAL[meta.reference_camera.slice(0, 1)] ?? 28;
+  const autoZoom = zoomFor(meta.info.focal_length_mm, meta.reference_camera);
+  const focalRange = h("input", {
+    type: "range",
+    min: nominal,
+    max: Math.max(150, nominal),
+    step: 1,
+    value: Math.round(nominal * edits.zoom),
+    id: "s-zoomcrop",
+  });
+  const focalOut = h("output", { for: "s-zoomcrop" }, `${Math.round(nominal * edits.zoom)} mm`);
+  const setFocal = (z: number) => {
+    edits = { ...edits, zoom: Math.max(1, Math.round(z * 1000) / 1000) };
+    focalRange.value = String(Math.round(nominal * edits.zoom));
+    focalOut.textContent = `${Math.round(nominal * edits.zoom)} mm`;
+    viewport.setFullWidth(displayWidth());
+    draw();
+    saveSoon();
+  };
+  focalRange.addEventListener("input", () => setFocal(Number(focalRange.value) / nominal));
+  focalRange.addEventListener("dblclick", () => setFocal(autoZoom));
   const hz = meta.vision?.horizon_deg;
   const geometrySection = h(
     "div",
@@ -470,6 +498,13 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
       h("label", { for: "s-straighten", title: t().dblClickReset }, t().straighten),
       strOut,
       strRange,
+    ),
+    h(
+      "div",
+      { class: "slider" },
+      h("label", { for: "s-zoomcrop", title: t().zoomCropTitle }, t().zoomCrop),
+      focalOut,
+      focalRange,
     ),
     hz !== null && hz !== undefined
       ? h(
@@ -720,8 +755,9 @@ function fusedModules(m: string[] | Record<string, unknown>, ref: string): strin
 /** Úpravy mimo slidery (geometrie, zdroj, vzhled), které Reset ani porovnání Před / po nevrací. */
 function geometry(
   e: Edits,
-): Pick<Edits, "flip_h" | "flip_v" | "source" | "rotate" | "straighten" | "look"> {
+): Pick<Edits, "flip_h" | "flip_v" | "source" | "rotate" | "straighten" | "zoom" | "look"> {
   return {
+    zoom: e.zoom,
     look: e.look,
     flip_h: e.flip_h,
     flip_v: e.flip_v,

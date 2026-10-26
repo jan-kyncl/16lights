@@ -56,7 +56,8 @@ are 3× faster. Ordered by impact:
    - [x] Night tele (00284 moon): calibration homography + phase correlation / ECC as a
          fallback, hot pixel clusters, module noise against the base (C detail no longer adds noise)
    - [ ] Fused B base at night: square artefacts around small street lamps (00284)
-   - [ ] 150 mm mode: crop to the zoomed field of view like Lumen
+   - [x] Crop to the zoomed field of view (`edits.zoom` from the header's focal length, every
+         mode, like the camera JPEG)
 7. [ ] **Depth as an output**: full resolution, GDepth and HEIC depth export (refocus in iPhone
        Photos), interactive parallax / 3D view in the browser
 8. [ ] **Learned L16 denoiser** (DGX Spark): Noise2Noise on aligned module and stack pairs

@@ -109,6 +109,7 @@ class Edits:
     flip_v: bool = False  # zrcadlení svisle
     rotate: int = 0  # otočení po směru hodin: 0 / 90 / 180 / 270 (oprava chybné orientace z IMU)
     straighten: float = 0.0  # vyrovnání horizontu ve stupních (+ = po směru hodin), s ořezem rohů
+    zoom: float = 1.0  # středový ořez na 1/zoom (zorné pole zvoleného ohniska, zoom_for)
     look: str = "l16"  # "l16" = vzhled JPEG z foťáku (looks/l16.json), "none" = lineární sRGB
     # "fused" = fúze A modulů (M3 krok 3; bez fúze se použije modul), "single" = jeden modul
     source: str = "fused"
@@ -130,11 +131,34 @@ def apply_flip(img: NDArray[Any], edits: Edits) -> NDArray[Any]:
         img = np.rot90(img, k=-k)  # k=-1 = 90° po směru hodin
     if edits.straighten:
         img = straighten(img, edits.straighten)
+    if edits.zoom > 1.0:
+        img = zoom_crop(img, edits.zoom)
     if edits.flip_v:
         img = img[::-1]
     if edits.flip_h:
         img = img[:, ::-1]
     return np.ascontiguousarray(img)
+
+
+# Nominální ohnisko referenčního modulu (ekvivalent 35 mm); foťák ořezává na zvolené ohnisko:
+# JPEG 35 mm v režimu 28 = 4160·28/35 px, tele 00204 (114 mm, B4) má zorné pole 0,608 snímku.
+NOMINAL_FOCAL = {"A": 28.0, "B": 70.0, "C": 150.0}
+
+
+def zoom_for(focal_mm: float | None, reference: str | None) -> float:
+    """Zoom (≥ 1) na zorné pole ohniska z hlavičky snímku vůči referenčnímu modulu."""
+    nominal = NOMINAL_FOCAL.get((reference or "")[:1])
+    if not focal_mm or not nominal or focal_mm <= nominal * 1.01:
+        return 1.0
+    return round(focal_mm / nominal, 3)
+
+
+def zoom_crop(img: NDArray[Any], zoom: float) -> NDArray[Any]:
+    """Středový výřez 1/zoom (bez převzorkování); ≡ zvětšení uStraighten.y v shaderu."""
+    h, w = img.shape[:2]
+    ch, cw = max(1, round(h / zoom)), max(1, round(w / zoom))
+    y0, x0 = (h - ch) // 2, (w - cw) // 2
+    return img[y0 : y0 + ch, x0 : x0 + cw]
 
 
 def straighten_scale(w: float, h: float, deg: float) -> float:

@@ -6,7 +6,7 @@ import { t } from "./i18n";
 const VERT = `#version 300 es
 uniform vec2 uFlip; // 1.0 = zrcadlit (x = vodorovně, y = svisle), shodně s tone.py::apply_flip
 uniform int uRot;   // otočení po směru hodin v násobcích 90° (před flipem)
-uniform vec3 uStraighten; // úhel [rad, + = po směru hodin], zvětšení, poměr stran zobrazení (w/h)
+uniform vec3 uStraighten; // úhel [rad, + = po směru hodin], zvětšení (× zoom), poměr stran (w/h)
 out vec2 vUv;
 void main() {
   // fullscreen trojúhelník; řádek 0 textury = horní okraj obrazu
@@ -14,7 +14,7 @@ void main() {
   vUv = vec2(p.x, 1.0 - p.y);
   vUv = mix(vUv, 1.0 - vUv, uFlip);
   // vyrovnání horizontu (≡ tone.py::straighten): bod zobrazení → bod před pootočením
-  if (uStraighten.x != 0.0) {
+  if (uStraighten.x != 0.0 || uStraighten.y != 1.0) {
     vec2 p = (vUv - 0.5) * vec2(uStraighten.z, 1.0);
     float c = cos(uStraighten.x), s = sin(uStraighten.x);
     p = vec2(c * p.x + s * p.y, -s * p.x + c * p.y) / uStraighten.y;
@@ -132,13 +132,13 @@ export function straightenScale(aspect: number, deg: number): number {
   return Math.cos(a) + Math.sin(a) * Math.max(aspect, 1 / aspect);
 }
 
-/** uv zobrazení (0..1, shora) → uv textury: zrušit flip, vyrovnání, pak otočení (jako vertex shader). */
+/** uv zobrazení (0..1, shora) → uv textury: zrušit flip, vyrovnání a zoom, pak otočení (jako vertex shader). */
 export function screenToTexture(u: number, v: number, e: Edits, aspect = 1): [number, number] {
   if (e.flip_h) u = 1 - u;
   if (e.flip_v) v = 1 - v;
-  if (e.straighten) {
+  if (e.straighten || e.zoom > 1) {
     const th = (e.straighten * Math.PI) / 180;
-    const sc = straightenScale(aspect, e.straighten);
+    const sc = straightenScale(aspect, e.straighten) * Math.max(1, e.zoom);
     const px = (u - 0.5) * aspect,
       py = v - 0.5;
     const qx = (Math.cos(th) * px + Math.sin(th) * py) / sc;
@@ -370,7 +370,7 @@ export class Renderer {
     gl.uniform3f(
       this.loc.uStraighten,
       (e.straighten * Math.PI) / 180,
-      straightenScale(aspect, e.straighten),
+      straightenScale(aspect, e.straighten) * Math.max(1, e.zoom),
       aspect,
     );
     gl.uniform1f(this.loc.uPeaking, peaking);

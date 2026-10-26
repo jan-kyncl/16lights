@@ -38,6 +38,7 @@ export interface Edits {
   source: "single" | "fused";
   rotate: 0 | 90 | 180 | 270;
   straighten: number; // stupně, + = po směru hodin
+  zoom: number; // středový ořez 1/zoom na zorné pole ohniska (≡ tone.py::zoom_for)
   look: "l16" | "none"; // vzhled JPEG z foťáku, nebo lineární sRGB
 }
 
@@ -68,6 +69,7 @@ export const DEFAULT_EDITS: Edits = {
   source: "fused",
   rotate: 0,
   straighten: 0,
+  zoom: 1,
   look: "l16",
 };
 
@@ -364,3 +366,13 @@ export const api = {
     };
   },
 };
+
+/** Nominální ohnisko referenčního modulu (ekv. 35 mm), ≡ tone.py::NOMINAL_FOCAL. */
+export const NOMINAL_FOCAL: Record<string, number> = { A: 28, B: 70, C: 150 };
+
+/** Zoom na zorné pole ohniska z hlavičky snímku (foťák ořezává JPEG stejně), ≡ tone.py::zoom_for. */
+export function zoomFor(focalMm: number | null | undefined, reference: string | undefined): number {
+  const nominal = NOMINAL_FOCAL[(reference ?? "").slice(0, 1)];
+  if (!focalMm || !nominal || focalMm <= nominal * 1.01) return 1;
+  return Math.round((focalMm / nominal) * 1000) / 1000;
+}

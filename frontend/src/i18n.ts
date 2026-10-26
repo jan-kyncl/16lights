@@ -76,6 +76,9 @@ const en = {
   geometry: "Geometry",
   straighten: "Straighten",
   straightenAuto: (deg: number) => `Level horizon (Apple Vision: ${deg.toFixed(1)}°)`,
+  zoomCrop: "Focal length",
+  zoomCropTitle:
+    "Crop to the field of view of this focal length (35 mm equivalent). Double-click: as shot",
   rotateRight: "Rotate 90° right (])",
   zoomOut: "Zoom out (−)",
   zoomIn: "Zoom in (+)",
@@ -298,6 +301,9 @@ const cs: Dict = {
   geometry: "Geometrie",
   straighten: "Vyrovnání",
   straightenAuto: (deg) => `Vyrovnat horizont (Apple Vision: ${deg.toFixed(1).replace(".", ",")}°)`,
+  zoomCrop: "Ohnisko",
+  zoomCropTitle:
+    "Ořez na zorné pole tohoto ohniska (ekvivalent 35 mm). Dvojklik: jak bylo nafoceno",
   rotateRight: "Otočit o 90° doprava (])",
   zoomOut: "Oddálit (−)",
   zoomIn: "Přiblížit (+)",

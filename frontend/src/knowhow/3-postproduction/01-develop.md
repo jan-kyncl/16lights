@@ -185,6 +185,17 @@ difference of 1.7/255 (`docs/progress/M2`).
 **Flip H/V** is applied after tone: in the vertex shader for the preview (`uFlip`), and
 `tone.apply_flip` for the export. It is part of `edits.json`. Reset and Before/after leave it alone.
 
+**Focal length** (`edits.zoom`, 2026-10-26): the L16 zooms continuously from 28 to 150 mm, and
+the camera JPEG is cropped to the chosen focal length: in the 28 mm mode a 35 mm shot is
+3328 px wide (4160 · 28/35), and on tele 00204 (114 mm, B4 reference) the camera's field of view
+is 0.608 of our frame, centred. Our frame is the reference module's field of view, so the default
+is `zoom = focal / nominal` (A 28, B 70, C 150 mm, from the header's `focal_length_mm`,
+`tone.zoom_for`), 1 within 1 %. The export crops the centre to `1/zoom` without resampling
+(52 MP on 00204 → 5107 × 3831, the camera JPEG then covers 99 % of it). The preview multiplies the
+straighten scale by `zoom` (`uStraighten.y`, `screenToTexture`), and 100 % in the viewer counts
+the cropped width. The _Focal length_ slider in Geometry shows the 35 mm equivalent;
+double-click returns to the shot's own. Shots and edits saved earlier get the default.
+
 ## 5. Export
 
 `l16core/export.py`: load `frames/<ref>.npy` (full-res float16) → `apply_tone` → `apply_flip` →

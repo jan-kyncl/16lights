@@ -48,6 +48,7 @@ from l16core.tone import (
     color_params,
     log_luma_base,
     to_uint8,
+    zoom_for,
 )
 
 log = structlog.get_logger()
@@ -804,15 +805,21 @@ def load_edits(shot_dir: Path) -> Edits:
     """Uložené úpravy; nový snímek začíná s automatickou expozicí a vzhledem L16."""
     p = shot_dir / "edits.json"
     meta_p = shot_dir / "meta.json"
-    auto = json.loads(meta_p.read_text()).get("auto_exposure") if meta_p.exists() else None
+    meta = json.loads(meta_p.read_text()) if meta_p.exists() else {}
+    auto = meta.get("auto_exposure")
     black = float(auto.get("black", 0.0)) if auto else 0.0
+    # zorné pole zvoleného ohniska jako JPEG z foťáku
+    zoom = zoom_for(meta.get("info", {}).get("focal_length_mm"), meta.get("reference_camera"))
     if not p.exists():
-        return Edits(exposure=float(auto["ev"]), black=black) if auto else Edits()
+        return (
+            Edits(exposure=float(auto["ev"]), black=black, zoom=zoom) if auto else Edits(zoom=zoom)
+        )
     d = json.loads(p.read_text())
     # úpravy uložené před vzhledem L16 (2026-10-23) byly laděné na lineární tón
     d.setdefault("look", "none")
-    # a před černým bodem (2026-10-26) dostanou automatický, jako v editoru
+    # a před černým bodem a zoomem (2026-10-26) dostanou automatické, jako v editoru
     d.setdefault("black", black)
+    d.setdefault("zoom", zoom)
     return Edits.from_dict(d)
 
 

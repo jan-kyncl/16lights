@@ -374,3 +374,16 @@ def test_mirror_pose_reflects_side_camera() -> None:
     assert np.linalg.det(R) == pytest.approx(1.0)
     np.testing.assert_allclose(R[2], [0, 0, 1], atol=1e-9)  # virtuální kamera se dívá do +z
     np.testing.assert_allclose(-R.T @ t, [10, 0, -10], atol=1e-9)  # střed = odraz za zrcátkem
+
+
+def test_zoom_crops_center_to_focal_field_of_view() -> None:
+    from l16core.tone import apply_flip, zoom_for
+
+    assert zoom_for(114, "B4") == round(114 / 70, 3)  # tele 00204
+    assert zoom_for(35, "A1") == 1.25  # JPEG z foťáku 3328 = 4160 · 28/35
+    assert zoom_for(28, "A1") == 1.0 and zoom_for(70.5, "B4") == 1.0  # tolerance 1 %
+    assert zoom_for(None, "A1") == 1.0 and zoom_for(50, None) == 1.0
+    img = np.arange(40 * 60, dtype=np.float32).reshape(40, 60)
+    out = apply_flip(img, Edits(zoom=2.0))
+    assert out.shape == (20, 30)
+    np.testing.assert_array_equal(out, img[10:30, 15:45])

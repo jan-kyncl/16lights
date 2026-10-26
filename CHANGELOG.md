@@ -7,6 +7,11 @@ processed it (`meta.json` → `version`), shown in the editor's info panel.
 
 ## Unreleased
 
+- **Focal length crop** (`edits.zoom`): the output is cropped to the focal length chosen when
+  shooting (for example 114 mm on a 150 mm mode shot, 35 mm in the 28 mm mode), like the camera
+  JPEG; the field of view matches it within 1 %. Centre crop without resampling in the export,
+  the same scale in the preview, and a _Focal length_ slider in Geometry (double-click: as shot).
+  Existing shots get it automatically.
 - **Night tele detail**: without SIFT matches, C modules fall back to the mirror calibration's
   homography with a shift from phase correlation and ECC (and then keep the ghost test against the
   base). Hot pixel clusters are removed at high gain, and very noisy modules no longer count noise
