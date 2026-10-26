@@ -126,6 +126,28 @@ def warp_map(
     return _distort(src, u, v)
 
 
+def homography_map(
+    ref: ModuleGeometry,
+    src: ModuleGeometry,
+    Hm: NDArray[np.float64],
+    size: tuple[int, int],
+    scale: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Mapa (px zdroje) pro plátno `scale`× reference přes homografii ideálních px."""
+    hs, ws = size
+    yy, xx = torch.meshgrid(
+        torch.arange(hs, device=DEV, dtype=torch.float32),
+        torch.arange(ws, device=DEV, dtype=torch.float32),
+        indexing="ij",
+    )
+    xu, yu = _undistort(ref, (xx + 0.5) / scale - 0.5, (yy + 0.5) / scale - 0.5)
+    h = [[float(v) for v in row] for row in Hm]
+    w = h[2][0] * xu + h[2][1] * yu + h[2][2]
+    u = (h[0][0] * xu + h[0][1] * yu + h[0][2]) / w
+    v = (h[1][0] * xu + h[1][1] * yu + h[1][2]) / w
+    return _distort(src, u, v)
+
+
 def _sample(
     img: torch.Tensor, mx: torch.Tensor, my: torch.Tensor, mode: str, fill: float
 ) -> torch.Tensor:
@@ -302,6 +324,57 @@ def fuse(
 # ── detail z B modulů (≡ l16core/detail.py::build) ────────────────────────────
 
 
+def _tone_residual(
+    canvas: torch.Tensor, warped: torch.Tensor, inside: torch.Tensor, sigma: float
+) -> torch.Tensor:
+    """≡ l16core/detail.py::tone_residual; nízké frekvence (základ − modul) v překryvu."""
+    H, W = inside.shape
+    q = cpu_detail.TONE_SCALE
+    m = inside.float()[None]
+    both = torch.cat([m * (canvas - warped), m])
+    small = F.interpolate(both[None], size=(H // q, W // q), mode="area")[0]
+    small = _gauss(small, sigma / q)
+    return small[:3] / small[3:].clamp_min(1e-3)  # (3, H/q, W/q)
+
+
+def _consensus(
+    warps: list[torch.Tensor], wgts: list[torch.Tensor], order: list[int], lum_scale: float
+) -> list[torch.Tensor]:
+    """≡ l16core/detail.py::consensus; warps (3, H, W), wgts (H, W) float16 → shoda (H, W).
+
+    Reference = moduly v pořadí `order` (nejostřejší první): každý si nárokuje zbytek plochy
+    podle své vyhlazené váhy. Ostatní moduly se s referencí musí shodovat v jemném měřítku.
+    """
+    H, W = wgts[0].shape
+    q = cpu_detail.REF_PICK_SCALE
+    ys = [_gauss((w.float() * LUMA).sum(0, keepdim=True), cpu_detail.FINE_SIGMA)[0] for w in warps]
+    yref = torch.zeros_like(ys[0])
+    remaining = torch.ones_like(ys[0])
+    for k in order:
+        ws = F.interpolate(wgts[k].float()[None, None], size=(H // q, W // q), mode="area")[0]
+        ws = _gauss(ws, cpu_detail.REF_PICK_SIGMA / q)
+        ws = F.interpolate(ws[None], size=(H, W), mode="bilinear", align_corners=False)[0, 0]
+        claim = remaining * (ws / cpu_detail.REF_CLAIM_WEIGHT).clamp(0, 1)
+        yref += claim * ys[k]
+        remaining -= claim
+    covered = remaining < 0.5
+    yref = yref / (1 - remaining).clamp_min(1e-3)
+    norm = torch.rsqrt(yref.clamp_min(0) + cpu_detail.NOISE_FLOOR * lum_scale)
+    out = []
+    for y, w in zip(ys, wgts, strict=True):
+        d = (y - yref) * norm
+        sel = covered & (w > cpu_detail.REF_MIN_WEIGHT) & (d.abs() > 0)
+        n = int(sel.sum())
+        if n < 1000:
+            out.append(torch.ones_like(y))
+            continue
+        s = 1.4826 * float(d[sel][:: max(1, n // 2_000_000)].abs().median()) + 1e-9
+        d2 = _gauss((d * d)[None], cpu_detail.GHOST_WINDOW)[0]
+        agree = torch.where(covered, torch.exp(-d2 / (cpu_detail.GHOST_K * s) ** 2), 1.0)
+        out.append(_gauss(agree[None], cpu_detail.GHOST_SMOOTH)[0])
+    return out
+
+
 def build(
     ref: ModuleGeometry,
     base_raw: F32,
@@ -335,28 +408,43 @@ def build(
     q4 = (W * S // 4, H * S // 4)
     canvas_g = _gray8(canvas, lum_scale, q4)
     stats: dict[str, Any] = {}
-    for n, (mod, raw, exposure, clip) in enumerate(modules):
-        if progress:
-            progress(f"detail {mod.camera}", 0.1 + 0.8 * n / max(1, len(modules)))
+    posed = []
+    for mod, raw, exposure, clip in modules:
         gain = ref_exposure / exposure
         mod_small = (
             np.asarray(cv2.resize(raw, small, interpolation=cv2.INTER_AREA), np.float32) * gain
         )
-        pose = cpu_detail.module_pose(
-            ref, mod, ref_small, mod_small, inv_small, conf_small, (W, H), lum_scale
-        )
+        planar = mod.camera[0] in cpu_detail.PLANAR_ARRAYS
+        if planar:
+            hom = cpu_detail.module_homography(ref, mod, ref_small, mod_small, (W, H), lum_scale)
+            pose = None if hom is None else (hom[0], None, hom[1])
+        else:
+            pose = cpu_detail.module_pose(
+                ref, mod, ref_small, mod_small, inv_small, conf_small, (W, H), lum_scale
+            )
         if pose is None:
             stats[mod.camera] = {"skipped": "pose"}
             continue
-        Rm, tv, pstat = pose
-        mx, my = warp_map(ref, mod, Rm, tv, inv_c, S)
+        posed.append((mod, raw, gain, clip, pose))
+    warps: list[torch.Tensor] = []  # mozaika (rovinně převedené moduly)
+    wgts: list[torch.Tensor] = []
+    covers: list[torch.Tensor] = []
+    cams: list[str] = []
+    for n, (mod, raw, gain, clip, (Rm, tv, pstat)) in enumerate(posed):
+        if progress:
+            progress(f"detail {mod.camera}", 0.1 + 0.8 * n / max(1, len(posed)))
+        planar = tv is None
         M = _t(raw.astype(np.float32))
-        warped = _sample(M, mx, my, "bicubic", -1.0)
-        fl = _residual_flow(
-            canvas_g, _gray8(warped.clamp_min(0) * gain, lum_scale, q4), (W * S, H * S), 12.0
-        )
-        mx, my = _compose_flow(mx, my, fl)
-        del fl
+        if planar:
+            mx, my = homography_map(ref, mod, Rm, (H * S, W * S), S)
+        else:
+            mx, my = warp_map(ref, mod, Rm, tv, inv_c, S)
+            warped = _sample(M, mx, my, "bicubic", -1.0)
+            fl = _residual_flow(
+                canvas_g, _gray8(warped.clamp_min(0) * gain, lum_scale, q4), (W * S, H * S), 12.0
+            )
+            mx, my = _compose_flow(mx, my, fl)
+            del fl
         warped = _sample(M, mx, my, "bicubic", -1.0) * gain
         inside = (mx >= 1) & (my >= 1) & (mx <= W - 2) & (my <= H - 2)
         # vyrovnání barev (poměr kanálů rozmazaných obrazů v překryvu)
@@ -371,34 +459,79 @@ def build(
             continue
         cgain = torch.stack([(cs[c][sel] / bs[c][sel].clamp_min(1e-6)).median() for c in range(3)])
         warped = warped * cgain.view(3, 1, 1)
+        if planar:
+            tone = _tone_residual(canvas, warped, inside, cpu_detail.TONE_SIGMA)
+            warped = (
+                warped
+                + F.interpolate(
+                    tone[None], size=(H * S, W * S), mode="bilinear", align_corners=False
+                )[0]
+            )
         edge = torch.minimum(torch.minimum(mx, my), torch.minimum((W - 1) - mx, (H - 1) - my))
         feather = (edge / cpu_detail.FEATHER_PX).clamp(0, 1)
-        wb = _gauss((warped * LUMA).sum(0, keepdim=True), 3.0)[0]
-        sigma = torch.sqrt(0.002 * base_blur.clamp_min(0) + 1e-5) * 5.0
-        agree = torch.exp(-(((wb - base_blur) / sigma) ** 2))
-        r = torch.sqrt(
-            (_detail_energy((warped * LUMA).sum(0, keepdim=True)) + e_floor) / (base_e + e_floor)
+        y = (warped * LUMA).sum(0, keepdim=True)
+        if planar:  # B4 vidí popředí jinde (paralaxa) – test proti základu nemá smysl
+            agree = torch.ones_like(feather)
+        else:
+            sigma = torch.sqrt(0.002 * base_blur.clamp_min(0) + 1e-5) * 5.0
+            agree = torch.exp(-(((_gauss(y, 3.0)[0] - base_blur) / sigma) ** 2))
+        r = torch.sqrt((_detail_energy(y) + e_floor) / (base_e + e_floor))
+        t = ((r - (cpu_detail.FOCUS_MIN - cpu_detail.FOCUS_RAMP)) / cpu_detail.FOCUS_RAMP).clamp(
+            0, 1
         )
-        focus = torch.where(
-            r < cpu_detail.FOCUS_MIN,
-            torch.zeros_like(r),
-            r.clamp(0, cpu_detail.FOCUS_MAX) ** cpu_detail.FOCUS_POWER,
-        )
-        del r
-        sat = _sample(_t(clip), mx, my, "bilinear", 0.0)[0] >= cpu_fusion.SATURATION
-        wgt = feather * agree * focus * inside * ~sat
-        acc += wgt[None] * torch.where(inside[None], warped, torch.zeros_like(warped))
-        wsum += wgt
+        ramp = t * t * (3 - 2 * t)
+        focus = r.clamp(0, cpu_detail.FOCUS_MAX) ** cpu_detail.FOCUS_POWER * ramp
+        del r, t, y
+        sat = (_sample(_t(clip), mx, my, "bilinear", 0.0) >= cpu_fusion.SATURATION).float()
+        if planar:
+            unsat = (1 - 2 * _gauss(sat, cpu_detail.SAT_SOFT)[0]).clamp(0, 1)
+        else:
+            unsat = 1 - sat[0]
+        cover = feather * inside * unsat
+        wgt = cover * agree * focus
         stats[mod.camera] = {
             **pstat,
             "coverage_pct": round(float(inside.float().mean()) * 100, 1),
             "used_pct": round(float((wgt > 0.5).float().mean()) * 100, 1),
-            "focus": round(float(focus[inside].median()), 2) if bool(inside.any()) else None,
+            "focus": round(float(focus[wgt > 0].median()), 2) if bool((wgt > 0).any()) else 0.0,
             "color_gain": [round(float(g), 3) for g in cgain],
         }
-        del M, warped, mx, my, edge, feather, wb, agree, wgt, focus
-    result = acc / wsum[None]
-    detail_pct = round(float(((wsum - cpu_detail.BASE_WEIGHT) > 0.5).float().mean()) * 100, 1)
+        warped = torch.where(inside[None], warped, torch.zeros_like(warped))
+        if planar:
+            warps.append(warped.half())
+            wgts.append(wgt.half())
+            covers.append((cover * ramp).half())
+            cams.append(mod.camera)
+        else:
+            acc += wgt[None] * warped
+            wsum += wgt
+        del M, warped, mx, my, edge, feather, agree, wgt, focus, cover, ramp, sat, unsat
+    if cams:
+        # mozaika: reference nejostřejší modul, ostatní jen kde se s ní shodují; s podkladem se
+        # prolíná podle krytí (měkký okraj, nezávisle na velikosti váhy ostrosti)
+        if progress:
+            progress("detail merge", 0.9)
+        order = sorted(range(len(cams)), key=lambda k: -stats[cams[k]]["focus"])
+        ghosts = _consensus(warps, wgts, order, lum_scale)
+        dacc = torch.zeros_like(canvas)
+        dsum = torch.zeros((H * S, W * S), device=DEV)
+        cover_all = torch.zeros((H * S, W * S), device=DEV)
+        for cam, warped, wgt, c, ghost in zip(cams, warps, wgts, covers, ghosts, strict=True):
+            wgt = wgt.float() * ghost
+            dacc += wgt[None] * warped.float()
+            dsum += wgt
+            cover_all = torch.maximum(cover_all, c.float())
+            stats[cam]["used_pct"] = round(float((wgt > 0.5).float().mean()) * 100, 1)
+            if bool((wgt > 0).any()):
+                stats[cam]["consensus"] = round(float(ghost[wgt > 0].mean()), 2)
+        del warps, wgts, covers, ghosts
+        det = dacc / dsum.clamp_min(1e-6)[None]
+        result = cover_all[None] * det + (1 - cover_all[None]) * canvas
+        detail_pct = round(float((cover_all > 0.5).float().mean()) * 100, 1)
+        del dacc, dsum, det, cover_all
+    else:
+        result = acc / wsum[None]
+        detail_pct = round(float(((wsum - cpu_detail.BASE_WEIGHT) > 0.5).float().mean()) * 100, 1)
     for r0 in range(0, H * S, 1024):
         out[r0 : r0 + 1024] = result[:, r0 : r0 + 1024].permute(1, 2, 0).half().cpu().numpy()
     summary = {

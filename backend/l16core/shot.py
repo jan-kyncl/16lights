@@ -557,7 +557,15 @@ def process_hires(
 
     # detail z pole s delším ohniskem: A → B (70 mm), B → C (150 mm)
     detail_array = DETAIL_ARRAY.get(ref[0])
-    bcams = [c for c in by_cam if detail_array and c.startswith(detail_array) and c in allgeo]
+    # mono modul (C6) by v mozaice dal špatnou barvu (chroma jen z vyrovnání barev) → bez něj
+    bcams = [
+        c
+        for c in by_cam
+        if detail_array
+        and c.startswith(detail_array)
+        and c in allgeo
+        and not lri.image_for_camera(c).sensor_model.name.endswith("MONO")
+    ]
     if not bcams:
         raise ValueError(f"no {detail_array or 'longer-focal'} modules for detail in this shot")
     fused = shot_dir / "frames" / "FUSED.npy"

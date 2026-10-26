@@ -47,7 +47,30 @@ where the L16's ~52 MP comes from. None of them mirror the image.
    made the denoised base look "soft" even against a defocused module.
 
 **Tele modes (70 / 150 mm, B4 reference)**: the same build runs B → C: the canvas is the B fusion,
-the detail comes from the six C modules (150 mm). See the Roadmap for the status.
+the detail comes from the C modules (150 mm). See the Roadmap for the status.
+
+**C mosaic** (2026-10-26). The C baselines to B4 are 75–89 mm, so at 3.6 m the parallax is ≈ 345
+px on the 2× canvas. A depth warp would need depth accurate to a few per cent; mono depth is not, and
+the C detail "melted" (wavy branches, oval holes from the flow towards the blurry base). C modules
+(`PLANAR_ARRAYS`) are therefore warped by a **dominant-plane homography** (SIFT + RANSAC, 6 px):
+each module stays internally coherent and errors move to the mosaic seams.
+
+1. No DIS flow and no ghost test against the base (B4 sees the foreground elsewhere).
+2. Colour gain, then a **low-frequency tone residual** (base − module, σ 128 at ¼ canvas). Smaller
+   σ copies the parallax-shifted base into the module.
+3. **Priority consensus**: modules sorted by median focus; each claims the remaining area by its
+   smoothed weight (σ 8 at ¼ canvas). The others count only where they agree with the claiming
+   module at fine scale (luma σ 1.2, windowed d² σ 1.5, threshold 3 · MAD).
+4. **Coverage blending**: `out = cover · D + (1 − cover) · canvas`, `D = Σ w x / Σ w`,
+   `cover = max(feather · inside · unsaturated · focus ramp)`. Independent of the focus weight
+   magnitude (up to 81), so the feather really feathers.
+5. Soft thresholds: focus smoothstep 0.6 → 0.8, soft saturation mask. Hard ones left ovals and dots.
+6. **C6 is a mono sensor** (`AR1335_MONO`): it gave a purple cast and is excluded from the detail.
+
+On 00204 the pine, leaves and fence are clean (fence sharper than lux); noise is close to lux. Open:
+a pale veil and a seam behind the distant pine, doubled near trunks at module edges on 00676 (one
+plane does not cover the depth), and lux is ≈ 2× sharper at edges because it sharpens the output.
+Tried and dropped: plane-sweep depth from C (noisy), C ↔ C flow in the mosaic (bent trunks).
 
 ## Results
 

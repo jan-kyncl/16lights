@@ -44,7 +44,10 @@ are 3× faster. Ordered by impact:
          native service (needs ~7 GB, more than the container)
    - [x] vs. lux on 00676 (70 mm): same edge detail, 35 % less noise. On 00204 (150 mm) lux is
          sharper (output sharpening + contrast) and ours shows ghosts where leaves moved
-   - [ ] Robust C ↔ C merge (sharpest module as reference, fine-scale ghost test between modules)
+   - [x] Robust C ↔ C merge: planar homography per C module, priority consensus with a
+         fine-scale ghost test, coverage blending, C6 (mono) excluded
+   - [ ] 00204: pale veil and seam behind the distant pine; 00676: doubled near trunks at module
+         edges
    - [ ] Output sharpening (Lumen sharpens; we do not yet)
    - [ ] Night tele (00284 moon): too few SIFT matches for the C pose → mirror model + image
          correlation as a fallback

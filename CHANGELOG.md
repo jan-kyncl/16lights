@@ -7,6 +7,13 @@ processed it (`meta.json` → `version`), shown in the editor's info panel.
 
 ## Unreleased
 
+- **Tele modes (70 / 150 mm)**: mirror module poses, depth and fusion from the B array (B4
+  reference), 52 MP detail from the C array with focus weights.
+- **C mosaic**: C modules are warped by a dominant-plane homography instead of depth + flow (the
+  75–89 mm baseline to B4 made the detail melt), merged by priority consensus (sharpest module
+  first, fine-scale ghost test between modules) and blended over the B canvas by coverage, with a
+  low-frequency tone residual. The C6 mono module is excluded from the detail (purple cast). The
+  28 mm mode is unchanged. Recompute 52 MP detail to apply.
 - **Fusion saturation against the sensor's saturation**: `develop` returns a clip map
   `max(rgb) / g` (vignetting gain `g`), warped with each module; the fusion, mono A2 and the 52 MP
   build reject pixels at ≥ 0.92 of it (CPU and GPU). The old `max(rgb) ≥ 0.92` test dropped
