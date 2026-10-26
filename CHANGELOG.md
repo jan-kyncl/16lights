@@ -5,7 +5,9 @@ whole repo: `backend/pyproject.toml` is the source, `native/pyproject.toml` and
 `frontend/package.json` must match (checked by a test). Every shot records the version that
 processed it (`meta.json` → `version`), shown in the editor's info panel.
 
-## Unreleased
+## 0.4.0 – 2026-10-26
+
+Tele quality: robust C mosaic, sharpening, black point, night tele and focal length crop.
 
 - **Focal length crop** (`edits.zoom`): the output is cropped to the focal length chosen when
   shooting (for example 114 mm on a 150 mm mode shot, 35 mm in the 28 mm mode), like the camera
