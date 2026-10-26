@@ -121,6 +121,26 @@ strength made the match worse (MAE 9.2 → 9.4 at 0.15 → 10.2 at 0.5), the cam
 - Trade-off: strong fine texture (±10 %) in extreme zones is partly treated as an edge and
   compressed with the base (about half of its amplitude at full strength).
 
+### Black point (`edits.black`, tele)
+
+Veiling glare in the B and C optics lifts the blacks, most under a bright overcast sky. On tele
+00204 the camera JPEG had p1 = 23 (8-bit), we and lux had 41 and 44, and the image looked
+veiled. The camera subtracts it on tele shots only.
+
+- **Subtraction**: `v = max(cam · WB − black, 0) · 2^exposure`, before the CCM (its rows sum to 1,
+  so a neutral offset commutes with it); shader and `tone.py` identical. Not applied to DNG.
+- **Auto** (`meta.auto_exposure.black`, the slider's default and _Auto_ button): `0.6 · p0.1` of
+  the preview luma (as-shot WB, long side 640 px, so noise does not lower the percentile), only
+  when the reference module is not an A module.
+- **Fit**: 15 tele RAW ↔ camera JPEG pairs (B4 reference) and 44 sampled 28 mm pairs. The best
+  per-shot offset correlates 0.86 with `p0.1 / mean`. Tele MAE with our auto exposure 9.78 → 9.10,
+  exposure unchanged (median offset 0). On 28 mm any offset made the match worse (8.98 → 9.45 at
+  0.8), so the look fit already covers it there. A saturation trim after the offset gained only 1 %
+  and was left out.
+- 00204: p1 / p50 = 25 / 77 (camera 23 / 78, lux 44 / 92). The sky stays darker than the camera's
+  (p95 230 vs 249), a per-shot exposure difference within the auto exposure's error.
+- Edits saved before the slider get the auto value (editor and `load_edits`).
+
 ### Sharpening (`edits.sharpen`)
 
 Lumen sharpens its output and we did not: on tele 00204, lux had twice our edge contrast

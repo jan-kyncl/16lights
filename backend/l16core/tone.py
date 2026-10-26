@@ -94,6 +94,7 @@ class Edits:
     """Nedestruktivní úpravy (všechny hodnoty v rozsahu sliderů v UI)."""
 
     exposure: float = 0.0  # EV
+    black: float = 0.0  # černý bod (lineárně po WB, 1 = saturace), odečte se před expozicí
     temperature: float = 0.0  # -1..1, kladně = tepleji
     tint: float = 0.0  # -1..1, kladně = do purpurova
     contrast: float = 0.0  # -1..1
@@ -445,7 +446,10 @@ def apply_tone(
     exp = np.float32(2.0**edits.exposure)
     gains = wb_gains(color, edits)
     # Přepaly jsou už v datech stažené do neutrální (develop.recover_highlights), bez ořezu.
-    v = cam_rgb.astype(np.float32) * (exp * gains)
+    v: F32 = (cam_rgb.astype(np.float32) * gains).astype(np.float32)
+    if edits.black > 0:  # neutrální po WB: CCM zachovává bílou, odečet s ní komutuje
+        v = np.maximum(v - np.float32(edits.black), 0.0).astype(np.float32)
+    v *= exp
     if edits.dynamic_range > 0:
         b = log_luma_base(cam_rgb, color) if base is None else base
         v *= base_gain(b, edits.dynamic_range, base_mean)[..., None]

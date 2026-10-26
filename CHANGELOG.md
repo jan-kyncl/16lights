@@ -7,6 +7,11 @@ processed it (`meta.json` → `version`), shown in the editor's info panel.
 
 ## Unreleased
 
+- **Black point** slider (`edits.black`): neutral offset subtracted after WB, before exposure, in
+  the shader and the export. Tele shots get an automatic value against veiling glare
+  (`0.6 · p0.1` of the preview luma, `meta.auto_exposure.black`); on 15 tele camera-JPEG pairs the
+  error drops 7 %, and 00204 loses its grey veil. 28 mm shots stay at 0. Run the exposure refresh
+  to fill it in for existing shots.
 - **Sharpening** slider (`edits.sharpen`, 0–1, default 0.5): unsharp mask in log luminance
   (σ 1 px, noise threshold, halo cap), the same gain in the shader and the export. On tele 00204 at
   full strength the edge contrast matches lux. Off with refocus and for DNG.

@@ -18,12 +18,19 @@ import numpy as np
 from mizukage import LriFile, RawImage
 from numpy.typing import NDArray
 
+from l16core.develop import downscale
 from l16core.lelr import view_preferences
 from l16core.tone import LUMA, ColorParams, Edits, apply_tone
 
 META_COEF = (0.528, -0.108, -0.94)  # A, B, C
 LUMA_COEF = (-0.239, -0.812)  # B, C bez metadat
 EV_RANGE = (-2.0, 3.0)
+# Tele (reference B): foťák odečítá rozptýlené světlo v optice (veiling glare zvedá černou, hlavně
+# pod jasnou oblohou). Černý bod = BLACK_K · 0,1. percentil jasu náhledu (delší strana 640 px,
+# šum nesnižuje percentil); fit na 15 tele párech RAW ↔ JPEG (MAE 9,78 → 9,10 s auto expozicí,
+# expozice beze změny). U 28 mm by odečet shodu s foťákem zhoršil (8,98 → 9,45).
+BLACK_K = 0.6
+BLACK_SIDE = 640
 
 
 def capture_ratio_ev(lri: LriFile, img: RawImage, lri_bytes: bytes) -> float | None:
@@ -37,11 +44,21 @@ def capture_ratio_ev(lri: LriFile, img: RawImage, lri_bytes: bytes) -> float | N
     return float(np.log2(gain * t / module))
 
 
+def _luma(preview: NDArray[np.float32], color: ColorParams) -> NDArray[np.float32]:
+    """Jas lineárního sRGB bez úprav a bez vzhledu (jako páry ve fitu)."""
+    y: NDArray[np.float32] = apply_tone(preview, color, Edits(look="none"), encode=False) @ LUMA
+    return y
+
+
 def log_mean_luma(preview: NDArray[np.float32], color: ColorParams) -> float:
     """Log-průměr jasu lineárního sRGB bez úprav a bez vzhledu (jako páry ve fitu)."""
-    lin = apply_tone(preview, color, Edits(look="none"), encode=False)
-    y = lin @ LUMA
-    return float(np.exp(np.log(np.maximum(y, 1e-5)).mean()))
+    return float(np.exp(np.log(np.maximum(_luma(preview, color), 1e-5)).mean()))
+
+
+def auto_black(preview: NDArray[np.float32], color: ColorParams) -> float:
+    """Černý bod tele snímku (lineárně, `Edits.black`)."""
+    small = downscale(preview, BLACK_SIDE)
+    return float(BLACK_K * np.percentile(_luma(small, color), 0.1))
 
 
 def auto_exposure(
@@ -55,8 +72,10 @@ def auto_exposure(
     else:
         b, c = LUMA_COEF
         ev = b * np.log2(lmean) + c
+    tele = not img.camera_id.name.startswith("A")
     return {
         "ev": round(float(np.clip(ev, *EV_RANGE)), 2),
+        "black": round(auto_black(preview, color), 5) if tele else 0.0,
         "capture_ratio_ev": None if ratio is None else round(ratio, 3),
         "log_mean_luma": round(lmean, 5),
     }

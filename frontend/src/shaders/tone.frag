@@ -7,6 +7,7 @@ out vec4 outColor;
 
 uniform sampler2D uImage;
 uniform float uExposure;   // EV
+uniform float uBlack;      // černý bod po WB (tone.py Edits.black)
 uniform vec3 uGains;       // WB zisky (as-shot × teplota/tón)
 uniform mat3 uCcm;         // kamerové RGB po WB → lineární sRGB
 uniform float uHighlights;
@@ -112,7 +113,7 @@ float peakMask(float e) {
 vec3 tone(vec3 cam) {
   // 1. expozice + 2. WB (přepaly jsou už v datech stažené do neutrální, bez ořezu)
   float e = exp2(uExposure);
-  vec3 v = cam * (e * uGains);
+  vec3 v = max(cam * uGains - uBlack, 0.0) * e;
 
   // 3. CCM
   v = max(uCcm * v, 0.0);

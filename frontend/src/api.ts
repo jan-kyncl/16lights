@@ -22,6 +22,7 @@ export interface ColorParams {
 
 export interface Edits {
   exposure: number;
+  black: number; // černý bod (lineárně po WB), tele: automaticky z meta.auto_exposure.black
   temperature: number;
   tint: number;
   contrast: number;
@@ -51,6 +52,7 @@ export interface Look {
 
 export const DEFAULT_EDITS: Edits = {
   exposure: 0,
+  black: 0,
   temperature: 0,
   tint: 0,
   contrast: 0,
@@ -90,7 +92,12 @@ export interface ShotMeta {
   /** Verze L16 Web Lab, která snímek zpracovala (starší snímky ji nemají). */
   version?: string;
   /** Automatická expozice jako JPEG z foťáku (EV), starší snímky ji nemají. */
-  auto_exposure?: { ev: number; capture_ratio_ev: number | null; log_mean_luma: number };
+  auto_exposure?: {
+    ev: number;
+    capture_ratio_ev: number | null;
+    log_mean_luma: number;
+    black?: number;
+  };
   preview: { width: number; height: number; format: string };
   full: { width: number; height: number };
   warnings: Warning[];

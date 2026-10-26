@@ -8,6 +8,7 @@ import { MAX_SCALE, Viewport } from "./viewport";
 
 type SliderKey =
   | "exposure"
+  | "black"
   | "temperature"
   | "tint"
   | "contrast"
@@ -20,6 +21,7 @@ type SliderKey =
 // Popisek = klíč slovníku stejného jména.
 const SLIDERS: [SliderKey, number, number, number][] = [
   ["exposure", -4, 4, 0.01],
+  ["black", 0, 0.05, 0.0005],
   ["temperature", -1, 1, 0.01],
   ["tint", -1, 1, 0.01],
   ["contrast", -1, 1, 0.01],
@@ -41,7 +43,9 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
   ]);
   // Výchozí tón snímku: automatická expozice jako JPEG z foťáku (l16core/exposure.py)
   const autoEv = meta.auto_exposure?.ev ?? 0;
-  const toneDefaults: Edits = { ...DEFAULT_EDITS, exposure: autoEv };
+  // tele: černý bod proti rozptýlenému světlu v optice (exposure.py::auto_black)
+  const autoBlack = meta.auto_exposure?.black ?? 0;
+  const toneDefaults: Edits = { ...DEFAULT_EDITS, exposure: autoEv, black: autoBlack };
   let edits: Edits = { ...toneDefaults, ...saved };
   if (edits.source === "fused" && !meta.fusion) edits = { ...edits, source: "single" };
   const firstPixels = edits.source === "fused" ? await api.preview(shotId, "fused") : pixels;
@@ -98,11 +102,14 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
     }, 600);
   };
 
+  // černý bod v procentech saturace, ostatní na dvě desetinná místa
+  const fmt = (k: SliderKey, v: number) =>
+    k === "black" ? `${(v * 100).toFixed(2)} %` : v.toFixed(2);
   const inputs = new Map<SliderKey, { range: HTMLInputElement; out: HTMLOutputElement }>();
   const sync = () => {
     for (const [k, { range, out }] of inputs) {
       range.value = String(edits[k]);
-      out.textContent = edits[k].toFixed(2);
+      out.textContent = fmt(k, edits[k]);
     }
   };
   const sliders = SLIDERS.map(([key, min, max, step]) => {
@@ -111,7 +118,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
     inputs.set(key, { range, out });
     range.addEventListener("input", () => {
       edits = { ...edits, [key]: Number(range.value) };
-      out.textContent = edits[key].toFixed(2);
+      out.textContent = fmt(key, edits[key]);
       ensureBase();
       draw();
       saveSoon();
@@ -174,7 +181,7 @@ export async function renderEditor(root: HTMLElement, shotId: string): Promise<v
       title: t().autoExposureHint,
       disabled: !meta.auto_exposure,
       onclick: () => {
-        edits = { ...edits, exposure: autoEv };
+        edits = { ...edits, exposure: autoEv, black: autoBlack };
         sync();
         draw();
         saveSoon();

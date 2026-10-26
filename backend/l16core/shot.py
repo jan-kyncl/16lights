@@ -799,13 +799,16 @@ def load_meta(shot_dir: Path) -> dict[str, Any]:
 def load_edits(shot_dir: Path) -> Edits:
     """Uložené úpravy; nový snímek začíná s automatickou expozicí a vzhledem L16."""
     p = shot_dir / "edits.json"
+    meta_p = shot_dir / "meta.json"
+    auto = json.loads(meta_p.read_text()).get("auto_exposure") if meta_p.exists() else None
+    black = float(auto.get("black", 0.0)) if auto else 0.0
     if not p.exists():
-        meta_p = shot_dir / "meta.json"
-        auto = json.loads(meta_p.read_text()).get("auto_exposure") if meta_p.exists() else None
-        return Edits(exposure=float(auto["ev"])) if auto else Edits()
+        return Edits(exposure=float(auto["ev"]), black=black) if auto else Edits()
     d = json.loads(p.read_text())
     # úpravy uložené před vzhledem L16 (2026-10-23) byly laděné na lineární tón
     d.setdefault("look", "none")
+    # a před černým bodem (2026-10-26) dostanou automatický, jako v editoru
+    d.setdefault("black", black)
     return Edits.from_dict(d)
 
 

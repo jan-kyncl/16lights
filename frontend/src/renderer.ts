@@ -40,6 +40,7 @@ export function halfToFloat(hb: number): number {
 const UNIFORMS = [
   "uImage",
   "uExposure",
+  "uBlack",
   "uGains",
   "uCcm",
   "uHighlights",
@@ -335,6 +336,7 @@ export class Renderer {
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.uniform1i(this.loc.uImage, 0);
     gl.uniform1f(this.loc.uExposure, e.exposure);
+    gl.uniform1f(this.loc.uBlack, e.black);
     gl.uniform3fv(this.loc.uGains, gains);
     // CCM je row-major → transpose=true
     gl.uniformMatrix3fv(this.loc.uCcm, true, ccmFor(color, gains).ccm);
