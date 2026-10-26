@@ -338,30 +338,44 @@ def _tone_residual(
 
 
 def _consensus(
-    warps: list[torch.Tensor], wgts: list[torch.Tensor], order: list[int], lum_scale: float
+    warps: list[torch.Tensor], wgts: list[torch.Tensor], lum_scale: float
 ) -> list[torch.Tensor]:
     """≡ l16core/detail.py::consensus; warps (3, H, W), wgts (H, W) float16 → shoda (H, W).
 
-    Reference = moduly v pořadí `order` (nejostřejší první): každý si nárokuje zbytek plochy
-    podle své vyhlazené váhy. Ostatní moduly se s referencí musí shodovat v jemném měřítku.
+    Reference = lokálně nejostřejší modul (podíl vyhlazené váhy^p). Ostatní moduly se s referencí
+    musí shodovat v jemném měřítku, modul ve své nárokované ploše vždy.
     """
     H, W = wgts[0].shape
     q = cpu_detail.REF_PICK_SCALE
     ys = [_gauss((w.float() * LUMA).sum(0, keepdim=True), cpu_detail.FINE_SIGMA)[0] for w in warps]
+    wss = [
+        _gauss(
+            F.interpolate(w.float()[None, None], size=(H // q, W // q), mode="area")[0],
+            cpu_detail.REF_PICK_SIGMA / q,
+        )
+        for w in wgts
+    ]
+    wmax = torch.stack(wss).amax(0)
+    total = (wmax / cpu_detail.REF_CLAIM_WEIGHT).clamp(0, 1)
+    pw = [(ws / wmax.clamp_min(1e-6)) ** cpu_detail.REF_CLAIM_POWER for ws in wss]
+    den = torch.stack(pw).sum(0).clamp_min(1e-6)
+
+    def up(x: torch.Tensor) -> torch.Tensor:
+        return F.interpolate(x[None], size=(H, W), mode="bilinear", align_corners=False)[0, 0]
+
     yref = torch.zeros_like(ys[0])
-    remaining = torch.ones_like(ys[0])
-    for k in order:
-        ws = F.interpolate(wgts[k].float()[None, None], size=(H // q, W // q), mode="area")[0]
-        ws = _gauss(ws, cpu_detail.REF_PICK_SIGMA / q)
-        ws = F.interpolate(ws[None], size=(H, W), mode="bilinear", align_corners=False)[0, 0]
-        claim = remaining * (ws / cpu_detail.REF_CLAIM_WEIGHT).clamp(0, 1)
+    claims = []
+    for k in range(len(warps)):
+        claim = up(total * pw[k] / den)
         yref += claim * ys[k]
-        remaining -= claim
+        claims.append(claim.half())
+    remaining = 1 - up(total)
+    del wss, pw, den
     covered = remaining < 0.5
     yref = yref / (1 - remaining).clamp_min(1e-3)
     norm = torch.rsqrt(yref.clamp_min(0) + cpu_detail.NOISE_FLOOR * lum_scale)
     out = []
-    for y, w in zip(ys, wgts, strict=True):
+    for y, w, c in zip(ys, wgts, claims, strict=True):
         d = (y - yref) * norm
         sel = covered & (w > cpu_detail.REF_MIN_WEIGHT) & (d.abs() > 0)
         n = int(sel.sum())
@@ -371,7 +385,7 @@ def _consensus(
         s = 1.4826 * float(d[sel][:: max(1, n // 2_000_000)].abs().median()) + 1e-9
         d2 = _gauss((d * d)[None], cpu_detail.GHOST_WINDOW)[0]
         agree = torch.where(covered, torch.exp(-d2 / (cpu_detail.GHOST_K * s) ** 2), 1.0)
-        out.append(_gauss(agree[None], cpu_detail.GHOST_SMOOTH)[0])
+        out.append(torch.maximum(_gauss(agree[None], cpu_detail.GHOST_SMOOTH)[0], c.float()))
     return out
 
 
@@ -417,7 +431,7 @@ def build(
         planar = mod.camera[0] in cpu_detail.PLANAR_ARRAYS
         if planar:
             hom = cpu_detail.module_homography(ref, mod, ref_small, mod_small, (W, H), lum_scale)
-            pose = None if hom is None else (hom[0], None, hom[1])
+            pose = None if hom is None else ((hom[0], hom[1]), None, hom[2])
         else:
             pose = cpu_detail.module_pose(
                 ref, mod, ref_small, mod_small, inv_small, conf_small, (W, H), lum_scale
@@ -436,17 +450,63 @@ def build(
         planar = tv is None
         M = _t(raw.astype(np.float32))
         if planar:
-            mx, my = homography_map(ref, mod, Rm, (H * S, W * S), S)
+            planes, support = Rm
+        if planar and len(planes) > 1:
+            # ≡ l16core/detail.py: výběr roviny na ¼ plátna
+            maps = [homography_map(ref, mod, Hp, (H * S, W * S), S) for Hp in planes]
+            ym = _gauss((M * LUMA).sum(0, keepdim=True) * gain, 1.5)
+            q = cpu_detail.REF_PICK_SCALE
+            ys_s, ins_s = [], []
+            for mxp, myp in maps:
+                mxs, mys = mxp[q // 2 :: q, q // 2 :: q], myp[q // 2 :: q, q // 2 :: q]
+                ys_s.append(_np(_sample(ym, mxs, mys, "bilinear", 0.0)))
+                ins = (mxs >= 1) & (mys >= 1) & (mxs <= W - 2) & (mys <= H - 2)
+                ins_s.append(_np(ins[None].float()) > 0.5)
+            base_s = _np((canvas * LUMA).sum(0, keepdim=True)[:, q // 2 :: q, q // 2 :: q])
+            sup = [cpu_detail.plane_support(pt, base_s.shape, S / q) for pt in support]
+            psel = cpu_detail.plane_weights(ys_s, ins_s, base_s, lum_scale, sup)
+            pstat["plane_pct"] = [round(float(w.mean()) * 100, 1) for w in psel]
+            # prolnutí obrazů rovin, ne map (≡ l16core/detail.py)
+            acc_w = torch.zeros((3, H * S, W * S), device=DEV)
+            acc_i = torch.zeros((H * S, W * S), device=DEV)
+            acc_e = torch.zeros_like(acc_i)
+            acc_c = torch.zeros_like(acc_i)
+            ct = _t(clip)
+            for (mxp, myp), w in zip(maps, psel, strict=True):
+                wf = F.interpolate(
+                    _t(w)[None], size=(H * S, W * S), mode="bilinear", align_corners=False
+                )[0, 0]
+                wi = wf * ((mxp >= 1) & (myp >= 1) & (mxp <= W - 2) & (myp <= H - 2))
+                acc_w += wi[None] * _sample(M, mxp, myp, "bicubic", -1.0).clamp_min(0)
+                acc_c += wi * _sample(ct, mxp, myp, "bilinear", 0.0)[0]
+                acc_i += wi
+                acc_e += wf * torch.minimum(
+                    torch.minimum(mxp, myp), torch.minimum((W - 1) - mxp, (H - 1) - myp)
+                )
+            warped = acc_w / acc_i.clamp_min(1e-6)[None] * gain
+            inside = acc_i > 0.5
+            edge = acc_e
+            clipv = acc_c / acc_i.clamp_min(1e-6)
+            del maps, ym, acc_w, acc_i, acc_c, ct
         else:
-            mx, my = warp_map(ref, mod, Rm, tv, inv_c, S)
-            warped = _sample(M, mx, my, "bicubic", -1.0)
-            fl = _residual_flow(
-                canvas_g, _gray8(warped.clamp_min(0) * gain, lum_scale, q4), (W * S, H * S), 12.0
-            )
-            mx, my = _compose_flow(mx, my, fl)
-            del fl
-        warped = _sample(M, mx, my, "bicubic", -1.0) * gain
-        inside = (mx >= 1) & (my >= 1) & (mx <= W - 2) & (my <= H - 2)
+            if planar:
+                mx, my = homography_map(ref, mod, planes[0], (H * S, W * S), S)
+            else:
+                mx, my = warp_map(ref, mod, Rm, tv, inv_c, S)
+                warped = _sample(M, mx, my, "bicubic", -1.0)
+                fl = _residual_flow(
+                    canvas_g,
+                    _gray8(warped.clamp_min(0) * gain, lum_scale, q4),
+                    (W * S, H * S),
+                    12.0,
+                )
+                mx, my = _compose_flow(mx, my, fl)
+                del fl
+            warped = _sample(M, mx, my, "bicubic", -1.0) * gain
+            inside = (mx >= 1) & (my >= 1) & (mx <= W - 2) & (my <= H - 2)
+            edge = torch.minimum(torch.minimum(mx, my), torch.minimum((W - 1) - mx, (H - 1) - my))
+            clipv = _sample(_t(clip), mx, my, "bilinear", 0.0)[0]
+            del mx, my
         # vyrovnání barev (poměr kanálů rozmazaných obrazů v překryvu)
         s8 = (H * S // 8, W * S // 8)
         bs = F.interpolate(_gauss(warped.clamp_min(0), 4.0)[None], size=s8, mode="area")[0]
@@ -467,7 +527,6 @@ def build(
                     tone[None], size=(H * S, W * S), mode="bilinear", align_corners=False
                 )[0]
             )
-        edge = torch.minimum(torch.minimum(mx, my), torch.minimum((W - 1) - mx, (H - 1) - my))
         feather = (edge / cpu_detail.FEATHER_PX).clamp(0, 1)
         y = (warped * LUMA).sum(0, keepdim=True)
         if planar:  # B4 vidí popředí jinde (paralaxa) – test proti základu nemá smysl
@@ -475,14 +534,16 @@ def build(
         else:
             sigma = torch.sqrt(0.002 * base_blur.clamp_min(0) + 1e-5) * 5.0
             agree = torch.exp(-(((_gauss(y, 3.0)[0] - base_blur) / sigma) ** 2))
-        r = torch.sqrt((_detail_energy(y) + e_floor) / (base_e + e_floor))
+        # mimo záběr plátno: hrana záběru (výplň −1) by v okně energie vypadala jako ostrý detail
+        y_e = torch.where(inside[None], y, (canvas * LUMA).sum(0, keepdim=True))
+        r = torch.sqrt((_detail_energy(y_e) + e_floor) / (base_e + e_floor))
         t = ((r - (cpu_detail.FOCUS_MIN - cpu_detail.FOCUS_RAMP)) / cpu_detail.FOCUS_RAMP).clamp(
             0, 1
         )
         ramp = t * t * (3 - 2 * t)
         focus = r.clamp(0, cpu_detail.FOCUS_MAX) ** cpu_detail.FOCUS_POWER * ramp
         del r, t, y
-        sat = (_sample(_t(clip), mx, my, "bilinear", 0.0) >= cpu_fusion.SATURATION).float()
+        sat = (clipv >= cpu_fusion.SATURATION).float()[None]
         if planar:
             unsat = (1 - 2 * _gauss(sat, cpu_detail.SAT_SOFT)[0]).clamp(0, 1)
         else:
@@ -505,14 +566,13 @@ def build(
         else:
             acc += wgt[None] * warped
             wsum += wgt
-        del M, warped, mx, my, edge, feather, agree, wgt, focus, cover, ramp, sat, unsat
+        del M, warped, clipv, edge, feather, agree, wgt, focus, cover, ramp, sat, unsat
     if cams:
         # mozaika: reference nejostřejší modul, ostatní jen kde se s ní shodují; s podkladem se
         # prolíná podle krytí (měkký okraj, nezávisle na velikosti váhy ostrosti)
         if progress:
             progress("detail merge", 0.9)
-        order = sorted(range(len(cams)), key=lambda k: -stats[cams[k]]["focus"])
-        ghosts = _consensus(warps, wgts, order, lum_scale)
+        ghosts = _consensus(warps, wgts, lum_scale)
         dacc = torch.zeros_like(canvas)
         dsum = torch.zeros((H * S, W * S), device=DEV)
         cover_all = torch.zeros((H * S, W * S), device=DEV)
@@ -525,7 +585,8 @@ def build(
             if bool((wgt > 0).any()):
                 stats[cam]["consensus"] = round(float(ghost[wgt > 0].mean()), 2)
         del warps, wgts, covers, ghosts
-        det = dacc / dsum.clamp_min(1e-6)[None]
+        # podklad jako slabá záloha (≡ l16core/detail.py)
+        det = (dacc + cpu_detail.BASE_WEIGHT * canvas) / (dsum + cpu_detail.BASE_WEIGHT)[None]
         result = cover_all[None] * det + (1 - cover_all[None]) * canvas
         detail_pct = round(float((cover_all > 0.5).float().mean()) * 100, 1)
         del dacc, dsum, det, cover_all

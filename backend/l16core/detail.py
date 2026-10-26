@@ -43,6 +43,7 @@ FOCUS_POWER = 4.0
 REF_PICK_SCALE = 4  # nárok reference na ¼ plátna
 REF_PICK_SIGMA = 8.0  # vyhlazení vah pro nárok (px plátna)
 REF_CLAIM_WEIGHT = 0.5  # vyhlazená váha, od které modul plně nárokuje plochu
+REF_CLAIM_POWER = 4.0  # ostrost lokálního nároku (podíl vah^p)
 REF_MIN_WEIGHT = 0.05
 FINE_SIGMA = 1.2
 GHOST_WINDOW = 1.5  # okno pro kvadrát rozdílu
@@ -55,6 +56,17 @@ NOISE_FLOOR = 0.01  # normalizace šumu √(Y + NOISE_FLOOR·lum_scale)
 # jen na švech mozaiky) a test proti základu se pro ně vypíná (B4 vidí popředí jinde).
 PLANAR_ARRAYS = ("C",)
 PLANAR_RANSAC_PX = 6.0
+# Více rovin: dominantní rovina (popředí) posune vzdálené pozadí o stovky px a každý modul jinam
+# (závoj, zdvojení). Postupný RANSAC najde další roviny, rovina se po pixelech vybere podle shody
+# s podkladem (B fúze je správně ve všech hloubkách) na ¼ plátna; v úzkém přechodu se prolnou
+# obrazy rovin.
+PLANES_MAX = 3
+PLANE_MIN_INLIERS = 40
+PLANE_WINDOW = 4.0  # σ okna rozdílu proti podkladu (px ¼ plátna)
+PLANE_BIAS = 1.25  # další rovina jen tam, kde je zřetelně lepší než dominantní
+PLANE_SMOOTH = 2.0  # σ přechodu mezi rovinami (px ¼ plátna)
+PLANE_SUPPORT = 40.0  # σ okolí inlierů vedlejší roviny (px ¼ plátna)
+PLANE_SUPPORT_MIN = 0.05  # podíl maxima hustoty inlierů, pod ním vedlejší rovina neplatí
 SAT_SOFT = 2.0  # mozaika: přepal měkce (σ px plátna, od 50 % pokrytí váha 0) – bez teček
 # Tón rovinně převedeného modulu (veiling glare zvedá černou C modulů, obloha jiného odstínu)
 # se po globálním vyrovnání barev doladí na základ: aditivní rozdíl nízkých frekvencí v překryvu.
@@ -113,31 +125,43 @@ def tone_residual(canvas: F32, warped: F32, inside: NDArray[np.bool_], sigma: fl
 def consensus(
     warps: list[NDArray[np.float16]],
     wgts: list[NDArray[np.float16]],
-    order: list[int],
     lum_scale: float,
 ) -> list[F32]:
-    """Shoda modulů mozaiky s referencí (moduly v pořadí `order`, nejostřejší první, si nárokují
-    zbytek plochy podle vyhlazené váhy) v jemném měřítku; warps (H, W, 3), wgts (H, W)."""
+    """Shoda modulů mozaiky s referencí v jemném měřítku; warps (H, W, 3), wgts (H, W).
+
+    Referencí je v každém místě lokálně nejostřejší modul (podíl vyhlazené váhy^REF_CLAIM_POWER,
+    měkký přechod). Globální pořadí podle mediánu ostrosti nechalo rozostřený modul nárokovat
+    plochu, kde byl ostřejší jiný (šedá skvrna v borovici, 00204).
+    Modul se ve své nárokované ploše shoduje vždy (max se shodou): v přechodu dvou nároků je
+    reference jejich směsí, neshodoval se ani jeden a poměr skoro nulových vah dával skvrnitý pruh.
+    """
     H, W = wgts[0].shape
     q = REF_PICK_SCALE
     ys = [
         np.asarray(cv2.GaussianBlur(w.astype(np.float32) @ LUMA, (0, 0), FINE_SIGMA), np.float32)
         for w in warps
     ]
+    wss = []
+    for w in wgts:
+        ws = cv2.resize(w.astype(np.float32), (W // q, H // q), interpolation=cv2.INTER_AREA)
+        wss.append(np.asarray(cv2.GaussianBlur(ws, (0, 0), REF_PICK_SIGMA / q), np.float32))
+    wmax = np.max(np.stack(wss), axis=0)
+    total = np.clip(wmax / REF_CLAIM_WEIGHT, 0, 1)
+    pw = [(ws / np.maximum(wmax, 1e-6)) ** REF_CLAIM_POWER for ws in wss]
+    den = np.maximum(sum(pw), 1e-6)
     yref = np.zeros((H, W), np.float32)
-    remaining = np.ones((H, W), np.float32)
-    for k in order:
-        ws = cv2.resize(wgts[k].astype(np.float32), (W // q, H // q), interpolation=cv2.INTER_AREA)
-        ws = cv2.GaussianBlur(ws, (0, 0), REF_PICK_SIGMA / q)
-        ws = cv2.resize(ws, (W, H), interpolation=cv2.INTER_LINEAR)
-        claim = remaining * np.clip(ws / REF_CLAIM_WEIGHT, 0, 1)
+    claims: list[NDArray[np.float16]] = []
+    for k in range(len(warps)):
+        claim = cv2.resize(total * pw[k] / den, (W, H), interpolation=cv2.INTER_LINEAR)
         yref += claim * ys[k]
-        remaining -= claim
+        claims.append(claim.astype(np.float16))
+    remaining = 1 - cv2.resize(total, (W, H), interpolation=cv2.INTER_LINEAR)
+    del wss, pw, den
     covered = remaining < 0.5
     yref /= np.maximum(1 - remaining, 1e-3)
     norm = 1.0 / np.sqrt(np.maximum(yref, 0) + NOISE_FLOOR * lum_scale)
     out = []
-    for y, w in zip(ys, wgts, strict=True):
+    for y, w, c in zip(ys, wgts, claims, strict=True):
         d = (y - yref) * norm
         sel = covered & (w > REF_MIN_WEIGHT) & (np.abs(d) > 0)
         n = int(sel.sum())
@@ -147,7 +171,8 @@ def consensus(
         s = 1.4826 * float(np.median(np.abs(d[sel][:: max(1, n // 2_000_000)]))) + 1e-9
         d2 = cv2.GaussianBlur(d * d, (0, 0), GHOST_WINDOW)
         agree = np.where(covered, np.exp(-d2 / (GHOST_K * s) ** 2), 1.0).astype(np.float32)
-        out.append(np.asarray(cv2.GaussianBlur(agree, (0, 0), GHOST_SMOOTH), np.float32))
+        agree = np.asarray(cv2.GaussianBlur(agree, (0, 0), GHOST_SMOOTH), np.float32)
+        out.append(np.maximum(agree, c.astype(np.float32)))
     return out
 
 
@@ -160,6 +185,14 @@ def unorient(arr: NDArray[Any], hold: Orientation | None) -> NDArray[Any]:
     if hold == Orientation.ROT180:
         return np.ascontiguousarray(arr[::-1, ::-1])
     return arr
+
+
+def _remap(img: F32, mx: F32, my: F32) -> F32:
+    """Bikubické převzorkování v px zdroje, mimo obraz −1."""
+    return np.asarray(
+        cv2.remap(img, mx, my, cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=-1),
+        np.float32,
+    )
 
 
 def _gray8(rgb: F32, scale: float) -> NDArray[np.uint8]:
@@ -197,20 +230,75 @@ def module_homography(
     mod_small: F32,
     full: tuple[int, int],
     scale: float,
-) -> tuple[NDArray[np.float64], dict[str, Any]] | None:
-    """Homografie ideálních px reference → ideální px modulu (dominantní rovina scény)."""
+) -> tuple[list[NDArray[np.float64]], list[NDArray[np.float64]], dict[str, Any]] | None:
+    """Homografie ideálních px reference → ideální px modulu, roviny scény od dominantní
+    (postupný RANSAC na zbylých shodách), a jejich inliery (px reference)."""
     m = _matches(ref_small, mod_small, full, scale)
     if m is None:
         return None
     pa, pb = m
     au, av = ref.undistort(pa[:, 0], pa[:, 1])
     bu, bv = mod.undistort(pb[:, 0], pb[:, 1])
-    Hm, inl = cv2.findHomography(
-        np.stack([au, av], 1), np.stack([bu, bv], 1), cv2.RANSAC, PLANAR_RANSAC_PX
-    )
-    if Hm is None or inl is None or int(inl.sum()) < 20:
+    a, b = np.stack([au, av], 1), np.stack([bu, bv], 1)
+    left = np.ones(len(a), bool)
+    planes: list[NDArray[np.float64]] = []
+    support: list[NDArray[np.float64]] = []
+    counts: list[int] = []
+    while len(planes) < PLANES_MAX and left.sum() >= PLANE_MIN_INLIERS:
+        Hm, inl = cv2.findHomography(a[left], b[left], cv2.RANSAC, PLANAR_RANSAC_PX)
+        n = 0 if inl is None else int(inl.sum())
+        if Hm is None or n < (20 if not planes else PLANE_MIN_INLIERS):
+            break
+        idx = np.nonzero(left)[0][inl[:, 0].astype(bool)]
+        planes.append(np.asarray(Hm, np.float64))
+        support.append(pa[idx])
+        counts.append(n)
+        left[idx] = False
+    if not planes:
         return None
-    return np.asarray(Hm, np.float64), {"plane_inliers": int(inl.sum()), "matches": len(pa)}
+    return planes, support, {"plane_inliers": counts, "matches": len(pa)}
+
+
+def plane_support(pts: NDArray[np.float64], shape: tuple[int, int], scale: float) -> F32:
+    """Okolí inlierů roviny (px reference → mřížka `shape` přes `scale`): homografie z části
+    shod platí jen tam, jinde posunula blízký plot o stovky px (duch sloupku, 00204)."""
+    m = np.zeros(shape, np.float32)
+    ix = np.clip(((pts[:, 0] + 0.5) * scale).astype(int), 0, shape[1] - 1)
+    iy = np.clip(((pts[:, 1] + 0.5) * scale).astype(int), 0, shape[0] - 1)
+    m[iy, ix] = 1.0
+    out: F32 = np.asarray(cv2.GaussianBlur(m, (0, 0), PLANE_SUPPORT), np.float32)
+    return out
+
+
+def plane_weights(
+    ys: list[F32],
+    ins: list[NDArray[np.bool_]],
+    base: F32,
+    lum_scale: float,
+    support: list[F32] | None = None,
+) -> list[F32]:
+    """Váhy rovin po pixelech (součet 1) z rozdílu převedeného jasu proti podkladu (¼ plátna);
+    vedlejší roviny jen v okolí svých inlierů (`support`, `plane_support`)."""
+    norm = 1.0 / np.sqrt(np.maximum(base, 0) + NOISE_FLOOR * lum_scale)
+    costs = []
+    for p, (y, i) in enumerate(zip(ys, ins, strict=True)):
+        g = float(np.median(base[i] / np.maximum(y[i], 1e-6))) if i.sum() > 100 else 1.0
+        fi = i.astype(np.float32)
+        d2 = np.where(i, ((g * y - base) * norm) ** 2, 0).astype(np.float32)
+        cov = cv2.GaussianBlur(fi, (0, 0), PLANE_WINDOW)
+        c = cv2.GaussianBlur(d2, (0, 0), PLANE_WINDOW) / np.maximum(cov, 1e-3)
+        # jen roviny, které pixel vidí (jinak díra, kterou zaplní horší modul)
+        ok = cov > 0.5
+        if p > 0 and support is not None:
+            ok &= support[p] > PLANE_SUPPORT_MIN * float(support[p].max())
+        costs.append(np.where(ok, c * (1.0 if p == 0 else PLANE_BIAS), np.inf))
+    best = np.argmin(np.stack(costs), axis=0)
+    return [
+        np.asarray(
+            cv2.GaussianBlur((best == p).astype(np.float32), (0, 0), PLANE_SMOOTH), np.float32
+        )
+        for p in range(len(ys))
+    ]
 
 
 def module_pose(
@@ -312,8 +400,8 @@ def build(
             if hom is None:
                 stats[mod.camera] = {"skipped": "pose"}
                 continue
-            Hm, pstat = hom
-            R, t = Hm, None
+            planes, support, pstat = hom
+            R, t = planes[0], None
         else:
             pose = module_pose(
                 ref, mod, ref_small, mod_small, inv_small, conf_small, (W, H), lum_scale
@@ -322,42 +410,80 @@ def build(
                 stats[mod.camera] = {"skipped": "pose"}
                 continue
             R, t, pstat = pose
-        mapx = np.empty((H * S, W * S), np.float32)
-        mapy = np.empty_like(mapx)
-        for r0 in range(0, H * S, 768):
-            rows = slice(r0, min(H * S, r0 + 768))
-            yy, xx = np.mgrid[rows, 0 : W * S].astype(np.float64)
-            xu, yu = ref.undistort((xx + 0.5) / S - 0.5, (yy + 0.5) / S - 0.5)
-            if t is None:  # homografie ideálních px
-                hw = R[2, 0] * xu + R[2, 1] * yu + R[2, 2]
-                u = (R[0, 0] * xu + R[0, 1] * yu + R[0, 2]) / hw
-                v = (R[1, 0] * xu + R[1, 1] * yu + R[1, 2]) / hw
-            else:
-                rx = Kinv[0, 0] * xu + Kinv[0, 1] * yu + Kinv[0, 2]
-                ry = Kinv[1, 1] * yu + Kinv[1, 2]
-                q = inv_c[rows].astype(np.float64) / 1000.0
-                px = R[0, 0] * rx + R[0, 1] * ry + R[0, 2] + t[0] * q
-                py = R[1, 0] * rx + R[1, 1] * ry + R[1, 2] + t[1] * q
-                pz = R[2, 0] * rx + R[2, 1] * ry + R[2, 2] + t[2] * q
-                u = mod.K[0, 0] * px / pz + mod.K[0, 1] * py / pz + mod.K[0, 2]
-                v = mod.K[1, 1] * py / pz + mod.K[1, 2]
-            ud, vd = mod.distort(u, v)
-            mapx[rows], mapy[rows] = ud, vd
 
-        def sample(mx: F32, my: F32, img: F32 = raw) -> F32:
-            return np.asarray(
-                cv2.remap(
-                    img, mx, my, cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=-1
-                ),
-                np.float32,
+        def map_for(
+            m: ModuleGeometry, R: NDArray[np.float64], t: NDArray[np.float64] | None
+        ) -> tuple[F32, F32]:
+            mapx = np.empty((H * S, W * S), np.float32)
+            mapy = np.empty_like(mapx)
+            for r0 in range(0, H * S, 768):
+                rows = slice(r0, min(H * S, r0 + 768))
+                yy, xx = np.mgrid[rows, 0 : W * S].astype(np.float64)
+                xu, yu = ref.undistort((xx + 0.5) / S - 0.5, (yy + 0.5) / S - 0.5)
+                if t is None:  # homografie ideálních px
+                    hw = R[2, 0] * xu + R[2, 1] * yu + R[2, 2]
+                    u = (R[0, 0] * xu + R[0, 1] * yu + R[0, 2]) / hw
+                    v = (R[1, 0] * xu + R[1, 1] * yu + R[1, 2]) / hw
+                else:
+                    rx = Kinv[0, 0] * xu + Kinv[0, 1] * yu + Kinv[0, 2]
+                    ry = Kinv[1, 1] * yu + Kinv[1, 2]
+                    q = inv_c[rows].astype(np.float64) / 1000.0
+                    px = R[0, 0] * rx + R[0, 1] * ry + R[0, 2] + t[0] * q
+                    py = R[1, 0] * rx + R[1, 1] * ry + R[1, 2] + t[1] * q
+                    pz = R[2, 0] * rx + R[2, 1] * ry + R[2, 2] + t[2] * q
+                    u = m.K[0, 0] * px / pz + m.K[0, 1] * py / pz + m.K[0, 2]
+                    v = m.K[1, 1] * py / pz + m.K[1, 2]
+                ud, vd = m.distort(u, v)
+                mapx[rows], mapy[rows] = ud, vd
+            return mapx, mapy
+
+        if t is None and len(planes) > 1:
+            # ¼ plátna: jas modulu (předem rozmazaný proti aliasingu) v mapě každé roviny
+            maps = [map_for(mod, Hp, None) for Hp in planes]
+            ym = np.asarray(cv2.GaussianBlur(raw @ LUMA * gain, (0, 0), 1.5), np.float32)
+            q = REF_PICK_SCALE
+            ys_s, ins_s = [], []
+            for mx, my in maps:
+                mxs, mys = mx[q // 2 :: q, q // 2 :: q], my[q // 2 :: q, q // 2 :: q]
+                ys_s.append(np.asarray(cv2.remap(ym, mxs, mys, cv2.INTER_LINEAR), np.float32))
+                ins_s.append((mxs >= 1) & (mys >= 1) & (mxs <= W - 2) & (mys <= H - 2))
+            base_s = np.asarray((canvas @ LUMA)[q // 2 :: q, q // 2 :: q], np.float32)
+            sup = [plane_support(pt, base_s.shape, S / q) for pt in support]
+            psel = plane_weights(ys_s, ins_s, base_s, lum_scale, sup)
+            pstat["plane_pct"] = [round(float(w.mean()) * 100, 1) for w in psel]
+            # prolnou se obrazy rovin, ne mapy: mezilehlá mapa mezi rovinami posunutými o stovky
+            # px tahala obsah odjinud (vlnovky)
+            acc_w = np.zeros((H * S, W * S, 3), np.float32)
+            acc_i = np.zeros((H * S, W * S), np.float32)
+            acc_e = np.zeros_like(acc_i)
+            acc_c = np.zeros_like(acc_i)
+            for (mx, my), w in zip(maps, psel, strict=True):
+                wf = cv2.resize(w, (W * S, H * S), interpolation=cv2.INTER_LINEAR)
+                inp = (mx >= 1) & (my >= 1) & (mx <= W - 2) & (my <= H - 2)
+                wi = wf * inp
+                acc_w += wi[..., None] * np.maximum(_remap(raw, mx, my), 0)
+                acc_c += wi * np.asarray(cv2.remap(clip, mx, my, cv2.INTER_LINEAR), np.float32)
+                acc_i += wi
+                acc_e += wf * np.minimum.reduce([mx, my, (W - 1) - mx, (H - 1) - my])
+            blend: tuple[F32, NDArray[np.bool_], F32, F32] | None = (
+                (acc_w / np.maximum(acc_i, 1e-6)[..., None]).astype(np.float32),
+                acc_i > 0.5,
+                acc_e.astype(np.float32),
+                (acc_c / np.maximum(acc_i, 1e-6)).astype(np.float32),
             )
+            del maps, ym, acc_w, acc_i, acc_c
+        else:
+            blend = None
+            mapx, mapy = map_for(mod, R, t)
 
         if not planar:  # rovinně převedené moduly se na základ nedolaďují (paralaxa)
             # zbytkový tok (¼ plátna) složený s mapou → jediné převzorkování
             q4 = (W * S // 4, H * S // 4)
             a = cv2.resize(_gray8(canvas, lum_scale), q4, interpolation=cv2.INTER_AREA)
             b = cv2.resize(
-                _gray8((np.maximum(sample(mapx, mapy), 0) * gain).astype(np.float32), lum_scale),
+                _gray8(
+                    (np.maximum(_remap(raw, mapx, mapy), 0) * gain).astype(np.float32), lum_scale
+                ),
                 q4,
                 interpolation=cv2.INTER_AREA,
             )
@@ -380,8 +506,17 @@ def build(
             mapx = np.ascontiguousarray(flow[..., 0], np.float32)
             mapy = np.ascontiguousarray(flow[..., 1], np.float32)
             del flow
-        warped = sample(mapx, mapy) * gain
-        inside = (mapx >= 1) & (mapy >= 1) & (mapx <= W - 2) & (mapy <= H - 2)
+        if blend is None:
+            blend = (
+                _remap(raw, mapx, mapy),
+                (mapx >= 1) & (mapy >= 1) & (mapx <= W - 2) & (mapy <= H - 2),
+                np.minimum.reduce([mapx, mapy, (W - 1) - mapx, (H - 1) - mapy]),
+                np.asarray(cv2.remap(clip, mapx, mapy, cv2.INTER_LINEAR), np.float32),
+            )
+            del mapx, mapy
+        warped, inside, edge, clipv = blend
+        warped = (warped * np.float32(gain)).astype(np.float32)
+        del blend
 
         # vyrovnání barev na základ (poměr kanálů rozmazaných obrazů v překryvu)
         s8 = (W * S // 8, H * S // 8)
@@ -410,7 +545,6 @@ def build(
             tone = tone_residual(canvas, warped, inside, TONE_SIGMA)
             warped += cv2.resize(tone, (W * S, H * S), interpolation=cv2.INTER_LINEAR)
 
-        edge = np.minimum.reduce([mapx, mapy, (W - 1) - mapx, (H - 1) - mapy])
         feather = np.clip(edge / FEATHER_PX, 0, 1)
         if planar:  # B4 vidí popředí jinde (paralaxa) – test proti základu nemá smysl
             agree = np.ones_like(feather)
@@ -419,12 +553,13 @@ def build(
             sigma = np.sqrt(0.002 * np.maximum(base_blur, 0) + 1e-5) * 5.0
             agree = np.exp(-(((wb - base_blur) / sigma) ** 2))
             del wb
-        fpow, ramp = focus_presence(
-            detail_energy((warped @ LUMA).astype(np.float32)), base_e, e_floor
-        )
+        # mimo záběr plátno: hrana záběru (výplň −1) by v okně energie vypadala jako ostrý detail
+        y_e = np.where(inside, warped @ LUMA, canvas @ LUMA).astype(np.float32)
+        fpow, ramp = focus_presence(detail_energy(y_e), base_e, e_floor)
+        del y_e
         focus = fpow * ramp
         # podíl saturace senzoru (develop.clip): saturace je v datech na úrovni zisku vinětace
-        sat = np.asarray(cv2.remap(clip, mapx, mapy, cv2.INTER_LINEAR), np.float32) >= SATURATION
+        sat = clipv >= SATURATION
         if planar:
             soft = cv2.GaussianBlur(sat.astype(np.float32), (0, 0), SAT_SOFT)
             unsat = np.clip(1 - 2 * soft, 0, 1)
@@ -447,16 +582,15 @@ def build(
         else:
             acc += w[..., None] * np.where(inside[..., None], warped, 0)
             wsum += w
-        del warped, mapx, mapy, agree, w, edge, feather, inside, focus, cover, ramp
+        del warped, clipv, agree, w, edge, feather, inside, focus, cover, ramp
 
     cover_all: F32 | None = None
     if cams:
-        # mozaika: reference nejostřejší modul, ostatní jen kde se s ní shodují; s podkladem se
-        # prolíná podle krytí (měkký okraj, nezávisle na velikosti váhy ostrosti)
+        # mozaika: reference lokálně nejostřejší modul, ostatní jen kde se s ní shodují; s podkladem
+        # se prolíná podle krytí (měkký okraj, nezávisle na velikosti váhy ostrosti)
         if progress:
             progress("detail merge", 0.9)
-        order = sorted(range(len(cams)), key=lambda k: -stats[cams[k]]["focus"])
-        ghosts = consensus(warps, wgts, order, lum_scale)
+        ghosts = consensus(warps, wgts, lum_scale)
         dacc = np.zeros_like(canvas)
         dsum = np.zeros((H * S, W * S), np.float32)
         cover_all = np.zeros((H * S, W * S), np.float32)
@@ -469,7 +603,9 @@ def build(
             if (w > 0).any():
                 stats[cam]["consensus"] = round(float(ghost[w > 0].mean()), 2)
         del warps, wgts, covers, ghosts
-        det = dacc / np.maximum(dsum, 1e-6)[..., None]
+        # podklad jako slabá záloha: kde mají všechny moduly skoro nulovou váhu (neshoda, okraj
+        # záběru), rozhodoval by poměr nepatrných vah (černé čárky z krajních řádků senzoru)
+        det = (dacc + BASE_WEIGHT * canvas) / (dsum + BASE_WEIGHT)[..., None]
         acc = cover_all[..., None] * det + (1 - cover_all[..., None]) * canvas
         wsum = np.ones_like(dsum)
         del dacc, dsum, det

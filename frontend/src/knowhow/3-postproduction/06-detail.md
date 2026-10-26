@@ -52,25 +52,42 @@ the detail comes from the C modules (150 mm). See the Roadmap for the status.
 **C mosaic** (2026-10-26). The C baselines to B4 are 75–89 mm, so at 3.6 m the parallax is ≈ 345
 px on the 2× canvas. A depth warp would need depth accurate to a few per cent; mono depth is not, and
 the C detail "melted" (wavy branches, oval holes from the flow towards the blurry base). C modules
-(`PLANAR_ARRAYS`) are therefore warped by a **dominant-plane homography** (SIFT + RANSAC, 6 px):
-each module stays internally coherent and errors move to the mosaic seams.
+(`PLANAR_ARRAYS`) are therefore warped by **plane homographies** (SIFT + RANSAC, 6 px): each
+module stays internally coherent and errors move to the mosaic seams.
 
-1. No DIS flow and no ghost test against the base (B4 sees the foreground elsewhere).
-2. Colour gain, then a **low-frequency tone residual** (base − module, σ 128 at ¼ canvas). Smaller
+1. **Several planes**: the dominant plane (foreground maple) shifts the distant pines by hundreds
+   of px, differently in each module (pale veil, melted pines). Sequential RANSAC on the remaining
+   matches finds up to 3 planes (≥ 40 inliers). The plane is chosen per pixel at ¼ canvas by the
+   blurred-luma difference against the base (the B fusion is right at every depth), with a bias
+   of 1.25 towards the dominant plane, and only where the plane sees the pixel and near its own
+   inliers (σ 40 px at ¼ canvas, a plane fitted to the pines moved the near fence elsewhere).
+   The **images** of the planes are blended (σ 2 at ¼ canvas), not the maps: a map halfway
+   between planes hundreds of px apart pulled content from elsewhere (squiggles).
+2. No DIS flow and no ghost test against the base (B4 sees the foreground elsewhere).
+3. Colour gain, then a **low-frequency tone residual** (base − module, σ 128 at ¼ canvas). Smaller
    σ copies the parallax-shifted base into the module.
-3. **Priority consensus**: modules sorted by median focus; each claims the remaining area by its
-   smoothed weight (σ 8 at ¼ canvas). The others count only where they agree with the claiming
-   module at fine scale (luma σ 1.2, windowed d² σ 1.5, threshold 3 · MAD).
-4. **Coverage blending**: `out = cover · D + (1 − cover) · canvas`, `D = Σ w x / Σ w`,
+4. **Local consensus**: the reference at each point is the locally sharpest module (share of the
+   smoothed weight⁴, σ 8 at ¼ canvas). A global order by median focus let the defocused C1
+   claim an area where C3 was sharp (grey blob). The others count only where they agree with the
+   reference at fine scale (luma σ 1.2, windowed d² σ 1.5, threshold 3 · MAD); a module always
+   agrees in its own claim (otherwise the transition between two claims was a speckled band).
+5. **Coverage blending**: `out = cover · D + (1 − cover) · canvas`,
+   `D = (Σ w x + 0.05 · canvas) / (Σ w + 0.05)`,
    `cover = max(feather · inside · unsaturated · focus ramp)`. Independent of the focus weight
-   magnitude (up to 81), so the feather really feathers.
-5. Soft thresholds: focus smoothstep 0.6 → 0.8, soft saturation mask. Hard ones left ovals and dots.
-6. **C6 is a mono sensor** (`AR1335_MONO`): it gave a purple cast and is excluded from the detail.
+   magnitude (up to 81), so the feather really feathers; the small canvas term stops a ratio of
+   near-zero weights from deciding (black dashes from the sensor's edge rows).
+6. **Focus energy** is computed with the canvas outside the module's view: the fill value at the
+   view's edge looked like sharp detail and gave a band of weight 25 (seam). This also touches
+   module edges in the 28 mm mode (≈ 1 % of pixels).
+7. Soft thresholds: focus smoothstep 0.6 → 0.8, soft saturation mask. Hard ones left ovals and dots.
+8. **C6 is a mono sensor** (`AR1335_MONO`): it gave a purple cast and is excluded from the detail.
 
-On 00204 the pine, leaves and fence are clean (fence sharper than lux); noise is close to lux. Open:
-a pale veil and a seam behind the distant pine, doubled near trunks at module edges on 00676 (one
-plane does not cover the depth), and lux is ≈ 2× sharper at edges because it sharpens the output.
-Tried and dropped: plane-sweep depth from C (noisy), C ↔ C flow in the mosaic (bent trunks).
+On 00204 the maple, the distant pines and the fence are coherent; noise 2.1–2.6 vs lux 1.95,
+edge Laplacian 14 vs 25 without sharpening (with _Sharpening_ at 1 it matches lux). CPU ≡ GPU
+(relative difference 1e-4); the CPU path peaks at 18.5 GB, so tele detail runs in the native
+service. Open: the top edge of the C coverage cuts through the pine tips (sharp below, base above)
+and doubled near trunks at module edges on 00676. Tried and dropped: plane-sweep depth from C
+(noisy), C ↔ C flow in the mosaic (bent trunks).
 
 ## Results
 

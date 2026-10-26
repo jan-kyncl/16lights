@@ -17,6 +17,11 @@ processed it (`meta.json` → `version`), shown in the editor's info panel.
   first, fine-scale ghost test between modules) and blended over the B canvas by coverage, with a
   low-frequency tone residual. The C6 mono module is excluded from the detail (purple cast). The
   28 mm mode is unchanged. Recompute 52 MP detail to apply.
+- **C mosaic, several planes**: up to 3 homographies per C module (sequential RANSAC), chosen per
+  pixel by agreement with the B base near each plane's own matches; the distant pines on 00204
+  are no longer a pale, melted double. The consensus reference is the locally sharpest module, and
+  the focus energy ignores the edge of the module's view (seam and grey blob on 00204). In the
+  28 mm mode this touches only module edges.
 - **Fusion saturation against the sensor's saturation**: `develop` returns a clip map
   `max(rgb) / g` (vignetting gain `g`), warped with each module; the fusion, mono A2 and the 52 MP
   build reject pixels at ≥ 0.92 of it (CPU and GPU). The old `max(rgb) ≥ 0.92` test dropped

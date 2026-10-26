@@ -46,7 +46,9 @@ are 3× faster. Ordered by impact:
          sharper (output sharpening + contrast) and ours shows ghosts where leaves moved
    - [x] Robust C ↔ C merge: planar homography per C module, priority consensus with a
          fine-scale ghost test, coverage blending, C6 (mono) excluded
-   - [ ] 00204: pale veil and seam behind the distant pine; 00676: doubled near trunks at module
+   - [x] 00204: pale veil behind the distant pines (several planes per module), seam and grey
+         blob (local consensus, focus energy at the view's edge)
+   - [ ] 00204: C coverage edge cuts through the pine tips; 00676: doubled near trunks at module
          edges
    - [x] Output sharpening (`edits.sharpen`, shader + export, default 0.5)
    - [ ] Night tele (00284 moon): too few SIFT matches for the C pose → mirror model + image
