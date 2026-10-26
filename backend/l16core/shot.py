@@ -579,7 +579,11 @@ def process_hires(
     for c in bcams:
         step(f"develop {c}", 0.05)
         dev = develop(lri, lri.image_for_camera(c), calib, Quality.FULL, oriented=False)
-        modules.append((allgeo[c], dev.rgb, exposure(c), dev.clip))
+        rgb = dev.rgb
+        if exposure(c) >= detail.HOT_MIN_EXPOSURE:
+            rgb, n_hot = detail.suppress_hot(np.asarray(rgb, np.float32))
+            log.info("hot_pixels", camera=c, peaks=n_hot)
+        modules.append((allgeo[c], rgb, exposure(c), dev.clip))
     H, W = base_raw.shape[:2]
     S = detail.SCALE
     tmp = shot_dir / "frames" / "HIRES.raw.npy"

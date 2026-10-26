@@ -334,7 +334,8 @@ def test_sharpen_gain_edges_not_noise() -> None:
 
 def test_black_point_subtracts_neutral_before_exposure() -> None:
     color = ColorParams(wb=(2.0, 1.0, 1.5), ccm=tuple(np.eye(3).reshape(-1)), illuminant=None)
-    img = np.array([[[0.005, 0.01, 0.01 / 1.5], [0.1, 0.2, 0.2 / 1.5]]], np.float32)  # po WB neutrální
+    # po WB neutrální
+    img = np.array([[[0.005, 0.01, 0.01 / 1.5], [0.1, 0.2, 0.2 / 1.5]]], np.float32)
     off = apply_tone(img, color, Edits(look="none", exposure=1.0), encode=False)
     on = apply_tone(img, color, Edits(look="none", exposure=1.0, black=0.01), encode=False)
     np.testing.assert_allclose(on[0, 0], 0.0, atol=1e-6)  # černá do nuly

@@ -7,6 +7,11 @@ processed it (`meta.json` → `version`), shown in the editor's info panel.
 
 ## Unreleased
 
+- **Night tele detail**: without SIFT matches, C modules fall back to the mirror calibration's
+  homography with a shift from phase correlation and ECC (and then keep the ghost test against the
+  base). Hot pixel clusters are removed at high gain, and very noisy modules no longer count noise
+  as detail. On night 00284 the 52 MP output is the clean base instead of a noisy rectangle with a
+  broken moon; day shots are unchanged. Recompute 52 MP detail to apply.
 - **Black point** slider (`edits.black`): neutral offset subtracted after WB, before exposure, in
   the shader and the export. Tele shots get an automatic value against veiling glare
   (`0.6 · p0.1` of the preview luma, `meta.auto_exposure.black`); on 15 tele camera-JPEG pairs the

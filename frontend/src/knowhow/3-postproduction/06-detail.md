@@ -82,6 +82,39 @@ module stays internally coherent and errors move to the mosaic seams.
 7. Soft thresholds: focus smoothstep 0.6 → 0.8, soft saturation mask. Hard ones left ovals and dots.
 8. **C6 is a mono sensor** (`AR1335_MONO`): it gave a purple cast and is excluded from the detail.
 
+**Night and scenes without matches** (2026-10-26, night tele 00284: moon, the edge of a house,
+20 ms × gain 7.75). SIFT finds 5–17 matches per C module, not even with log luma, so the pose
+fell through and the detail was empty.
+
+1. **Calibration fallback** (`prior_homography`): the homography at infinity from the mirror
+   calibration, `K_C · R_C · R_B4ᵀ · K_B4⁻¹`, is off by 10–35 px. A shift from phase correlation
+   (ECC alone reaches only a few px), refined by ECC (translation) on high-pass log luma
+   (σ 1–8 px, so the glow around lights does not pull it). Affine ECC drifts on such a poor
+   scene. Accepted at ECC ≥ 0.15 and a shift ≤ 80 px. One shift fits one depth only (the house
+   sits, the moon at infinity does not), so these modules keep the **ghost test against the
+   base**, mismatch lowers the coverage too, and saturated areas are excluded with a 128 px
+   margin (the C modules' own flare rays looked like detail in the smooth glow: rings around
+   the moon).
+2. **Hot pixels** (`suppress_hot`, from exposure × gain ≥ 20 only): the factory map misses
+   ~5000 per module at this gain, and the 4-frame stack smears them into 2–4 px clusters, which a
+   5 × 5 median keeps. White top-hat (opening 7 px) above 8× the local noise, mask grown by 2 px,
+   filled by normalized convolution. A single peak has a huge detail energy and won a disc of
+   ~50 px.
+3. **Module noise**: the DoG energy counts noise as detail, and one C module has 3–6× the noise
+   excess of the denoised B fusion (the median of the base energy is the unit), so its
+   "sharpness" of 12–38 overwrote the base with noise. The excess Δ (10th percentile of the energy
+   in 12 luma bins, ¼ canvas) is subtracted from the module and added to the base:
+   `r = √((E_mod − pΔ + e)/(E_base + pΔ + e))`, so in flat areas the noisier one loses. `p` goes
+   0 → 2 between a ratio of 2 and 3. Day modules are at 0.4–2.0, and a penalty there pulled the
+   mosaic back from the smooth fence post on 00204, exposing the base's parallax double.
+4. **Tone residual** without saturated areas (+ 24 px): B4 has half the exposure, so its moon is
+   much brighter than the clipped C one, and the σ 128 window spread that into rings.
+
+Result on 00284: the C modules are noisier than the base everywhere and misaligned by ~50 px on
+the lower house, so they now contribute nothing (detail 0.2 % instead of a noisy rectangle with a
+broken moon), and the 52 MP output is the clean upscaled base. Day shots are unchanged (00204,
+00676, 28 mm sample: same coverage).
+
 On 00204 the maple, the distant pines and the fence are coherent; noise 2.1–2.6 vs lux 1.95,
 edge Laplacian 14 vs 25 without sharpening (with _Sharpening_ at 1 it matches lux). CPU ≡ GPU
 (relative difference 1e-4); the CPU path peaks at 18.5 GB, so tele detail runs in the native

@@ -53,8 +53,9 @@ are 3× faster. Ordered by impact:
    - [x] Output sharpening (`edits.sharpen`, shader + export, default 0.5)
    - [x] Tele tone: automatic black point against veiling glare (`edits.black`), lux is not the
          reference here, the camera JPEG is
-   - [ ] Night tele (00284 moon): too few SIFT matches for the C pose → mirror model + image
-         correlation as a fallback
+   - [x] Night tele (00284 moon): calibration homography + phase correlation / ECC as a
+         fallback, hot pixel clusters, module noise against the base (C detail no longer adds noise)
+   - [ ] Fused B base at night: square artefacts around small street lamps (00284)
    - [ ] 150 mm mode: crop to the zoomed field of view like Lumen
 7. [ ] **Depth as an output**: full resolution, GDepth and HEIC depth export (refocus in iPhone
        Photos), interactive parallax / 3D view in the browser

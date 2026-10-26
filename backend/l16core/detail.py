@@ -35,6 +35,23 @@ FOCUS_MIN = 0.8
 FOCUS_RAMP = 0.2
 FOCUS_MAX = 3.0
 FOCUS_POWER = 4.0
+# Horké pixely: tovární mapa nestačí při vysokém zisku (00284: 20 ms × 7,75, ~2000 špiček na modul);
+# špička má obří energii detailu a modul pak vyhraje celé okolí. Jen od expozice × zisku HOT_MIN.
+HOT_MIN_EXPOSURE = 20.0  # ms × zisk (den 0,4–4, noc 155)
+HOT_K = 8.0
+HOT_SIZE = 7  # px senzoru
+# Šum modulu: energie pásma DoG je i šum, v noci (00284) má jeden C modul šumu mnohonásobně víc
+# než odšuměná B fúze a „ostrost“ 12–38 přepsala základ šumem. Nadbytek šumu modulu nad základem
+# Δ (spodní obálka energie, NOISE_PCT. percentil v pásmech jasu překryvu, ¼ plátna) se od energie
+# modulu odečte a k základu přičte: v ploché ploše pak r = √((šum základu)/(šum modulu)), v textuře
+# se porovná signál. Jen u modulů s šumem výrazně nad základem (medián Δ / medián energie základu
+# v NOISE_GATE: 00204 den 0,4–2,0, 00284 noc 3,2–6,4) a jen rovinné C: mozaika by jinak ustoupila
+# i tam, kde má základ duchy (00204: zdvojený sloupek plotu z B4, v režimu 28 mm noha židle).
+NOISE_PENALTY = 2.0
+NOISE_GATE = (2.0, 3.0)
+NOISE_PCT = 10.0
+NOISE_BINS = 12
+NOISE_SCALE = 4
 # Shoda modulů mezi sebou: test proti rozmazanému základu jemné rozdíly nevidí a u paralaxy
 # (popředí v každém modulu jinde, jedna hloubka na pixel to nepokryje) dá směs modulů „roztavený“
 # obraz. Reference = moduly podle ostrosti, nejostřejší si nárokuje celé své pokrytí (měkce podle
@@ -67,12 +84,54 @@ PLANE_BIAS = 1.25  # další rovina jen tam, kde je zřetelně lepší než domi
 PLANE_SMOOTH = 2.0  # σ přechodu mezi rovinami (px ¼ plátna)
 PLANE_SUPPORT = 40.0  # σ okolí inlierů vedlejší roviny (px ¼ plátna)
 PLANE_SUPPORT_MIN = 0.05  # podíl maxima hustoty inlierů, pod ním vedlejší rovina neplatí
+# Záloha bez SIFT shod (noc 00284: měsíc, okraj domu, šum – 5–17 shod): homografie v nekonečnu
+# z kalibrace zrcátek (chyba ~10–35 px) doladěná posunem ECC na high-pass log jasu (záře kolem
+# světel by posun táhla). Jen posun: afinní ECC na tak chudé scéně ujíždí.
+PRIOR_HP_SIGMA = (1.0, 8.0)  # pásmo high-pass (px náhledu)
+PRIOR_ECC_MIN = 0.15  # korelace pod ní = nespolehlivé
+PRIOR_SHIFT_MAX = 80.0  # px plného rozlišení
 SAT_SOFT = 2.0  # mozaika: přepal měkce (σ px plátna, od 50 % pokrytí váha 0) – bez teček
 # Tón rovinně převedeného modulu (veiling glare zvedá černou C modulů, obloha jiného odstínu)
 # se po globálním vyrovnání barev doladí na základ: aditivní rozdíl nízkých frekvencí v překryvu.
 # Široké okno, protože popředí je proti základu posunuté (paralaxa) – jen hrubý tón.
 TONE_SIGMA = 128.0
 TONE_SCALE = 4  # výpočet na ¼ plátna
+# Přepal modulu se z tónu vynechá i s okolím (záře): základ (B4 s poloviční expozicí) má měsíc
+# 00284 mnohem jasnější než oříznutý C modul, rozdíl rozlitý oknem σ 128 dělal prstence.
+TONE_SAT_GROW = 24  # px plátna
+# Záloha z kalibrace kolem přepalu nepřispívá vůbec: flare paprsky C modulů (jiné než B4) v hladké
+# záři vypadají jako detail a jediný posun na světla v jiné hloubce nesedí (srpky u měsíce).
+PRIOR_SAT_GROW = 128  # px plátna
+
+
+def grow_mask(mask: NDArray[np.bool_], radius: int) -> NDArray[np.bool_]:
+    """Dilatace masky o `radius` px (na ¼ rozlišení, velká okna)."""
+    H, W = mask.shape
+    q = 4
+    small = cv2.resize(mask.astype(np.float32), (W // q, H // q), interpolation=cv2.INTER_AREA) > 0
+    k = 2 * (radius // q) + 1
+    grown = cv2.dilate(small.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    out: NDArray[np.bool_] = cv2.resize(grown, (W, H), interpolation=cv2.INTER_NEAREST) > 0
+    return out | mask
+
+
+def suppress_hot(rgb: F32) -> tuple[F32, int]:
+    """Horké pixely mimo tovární mapu (vysoký zisk, noc). Stack snímků je rozmaže do shluků 2–4 px,
+    proto top-hat (jas − otevření HOT_SIZE) nad HOT_K× lokální šum; maska se rozšíří o 2 px
+    a doplní normalizovanou konvolucí okolí. In place."""
+    y = np.asarray(rgb @ LUMA, np.float32)
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (HOT_SIZE, HOT_SIZE))
+    top = y - cv2.morphologyEx(y, cv2.MORPH_OPEN, k)
+    s = 1.25 * cv2.blur(np.abs(y - cv2.medianBlur(y, 5)), (31, 31)) + 1e-6
+    peak = (top > HOT_K * s).astype(np.uint8)
+    hot = cv2.dilate(peak, np.ones((5, 5), np.uint8))
+    keep = (1 - hot).astype(np.float32)
+    den = cv2.GaussianBlur(keep, (0, 0), 2.0)
+    num = cv2.GaussianBlur(rgb * keep[..., None], (0, 0), 2.0)
+    fill = num / np.maximum(den, 1e-3)[..., None]
+    m = hot.astype(bool)
+    rgb[m] = fill[m]
+    return rgb, int(peak.sum())
 
 
 def detail_energy(y: F32) -> F32:
@@ -99,6 +158,36 @@ def focus_presence(e_mod: F32, e_base: F32, floor: float) -> tuple[F32, F32]:
     t = np.clip((r - (FOCUS_MIN - FOCUS_RAMP)) / FOCUS_RAMP, 0.0, 1.0)
     ramp = (t * t * (3 - 2 * t)).astype(np.float32)
     return (np.clip(r, 0.0, FOCUS_MAX) ** FOCUS_POWER).astype(np.float32), ramp
+
+
+def noise_excess(e_mod: F32, e_base: F32, y: F32, inside: NDArray[np.bool_]) -> F32:
+    """Nadbytek energie šumu modulu nad základem podle jasu y (vše na ¼ plátna, stejný tvar)."""
+    sel = inside & (y > 0)
+    if sel.sum() < 1000:
+        return np.zeros_like(e_mod)
+    ly = np.log2(np.maximum(y, 1e-6))
+    edges = np.percentile(ly[sel], np.linspace(0, 100, NOISE_BINS + 1))
+    idx = np.clip(np.searchsorted(edges, ly[sel], side="right") - 1, 0, NOISE_BINS - 1)
+    em, eb = e_mod[sel], e_base[sel]
+    centers, excess = [], []
+    for k in range(NOISE_BINS):
+        b = idx == k
+        if b.sum() < 50:
+            continue
+        centers.append(float(np.median(ly[sel][b])))
+        excess.append(
+            max(float(np.percentile(em[b], NOISE_PCT) - np.percentile(eb[b], NOISE_PCT)), 0.0)
+        )
+    if not centers:
+        return np.zeros_like(e_mod)
+    out: F32 = np.interp(ly, centers, excess).astype(np.float32)
+    return out
+
+
+def noise_penalty(ratio: float) -> float:
+    """Váha odečtu nadbytku šumu podle jeho poměru k energii základu (plynule v NOISE_GATE)."""
+    t = min(max((ratio - NOISE_GATE[0]) / (NOISE_GATE[1] - NOISE_GATE[0]), 0.0), 1.0)
+    return NOISE_PENALTY * t * t * (3 - 2 * t)
 
 
 def focus_weight(e_mod: F32, e_base: F32, floor: float) -> F32:
@@ -259,6 +348,71 @@ def module_homography(
     return planes, support, {"plane_inliers": counts, "matches": len(pa)}
 
 
+def _highpass_log(y: F32) -> F32:
+    lg = cv2.GaussianBlur(
+        np.log2(np.maximum(y, 1e-5)).astype(np.float32), (0, 0), PRIOR_HP_SIGMA[0]
+    )
+    return np.asarray(lg - cv2.GaussianBlur(lg, (0, 0), PRIOR_HP_SIGMA[1]), np.float32)
+
+
+def prior_homography(
+    ref: ModuleGeometry,
+    mod: ModuleGeometry,
+    ref_small: F32,
+    mod_small: F32,
+    full: tuple[int, int],
+) -> tuple[list[NDArray[np.float64]], list[NDArray[np.float64]], dict[str, Any]] | None:
+    """Homografie ideálních px reference → modulu bez shod: rotace z kalibrace + posun z ECC."""
+    if ref.R is None or mod.R is None:
+        return None
+    Hp = mod.K @ mod.R @ ref.R.T @ np.linalg.inv(ref.K)
+    W, _ = full
+    sh, sw = ref_small.shape[:2]
+    s = W / sw
+    yy, xx = np.mgrid[0:sh, 0:sw].astype(np.float64)
+    xu, yu = ref.undistort((xx + 0.5) * s - 0.5, (yy + 0.5) * s - 0.5)
+    hw = Hp[2, 0] * xu + Hp[2, 1] * yu + Hp[2, 2]
+    ud, vd = mod.distort(
+        (Hp[0, 0] * xu + Hp[0, 1] * yu + Hp[0, 2]) / hw,
+        (Hp[1, 0] * xu + Hp[1, 1] * yu + Hp[1, 2]) / hw,
+    )
+    ms = W / mod_small.shape[1]
+    mx = ((ud + 0.5) / ms - 0.5).astype(np.float32)
+    my = ((vd + 0.5) / ms - 0.5).astype(np.float32)
+    inside = (mx >= 1) & (my >= 1) & (mx <= mod_small.shape[1] - 2) & (my <= mod_small.shape[0] - 2)
+    mask = cv2.erode(inside.astype(np.uint8), np.ones((31, 31), np.uint8))
+    if mask.mean() < 0.02:
+        return None
+    a = _highpass_log(np.asarray(ref_small @ LUMA, np.float32))
+    b = _highpass_log(np.asarray(cv2.remap(mod_small @ LUMA, mx, my, cv2.INTER_LINEAR), np.float32))
+    # počátek z fázové korelace (ECC má dosah jen pár px, kalibrace se mýlí až o ~17 px náhledu),
+    # okno měkce do masky, ať hrana záběru nevypadá jako struktura
+    win = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), 16.0) * cv2.createHanningWindow(
+        (sw, sh), cv2.CV_32F
+    )
+    (px, py), _ = cv2.phaseCorrelate((a * win).astype(np.float64), (b * win).astype(np.float64))
+    M = np.array([[1, 0, px], [0, 1, py]], np.float32)
+    crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 300, 1e-7)
+    try:
+        cc, Mr = cv2.findTransformECC(a, b, M, cv2.MOTION_TRANSLATION, crit, mask, 5)
+    except cv2.error:
+        return None
+    shift = np.asarray(Mr, np.float64)[:, 2] * s
+    if cc < PRIOR_ECC_MIN or float(np.hypot(*shift)) > PRIOR_SHIFT_MAX:
+        return None
+    T = np.eye(3)
+    T[:2, 2] = shift  # ref(x) ≈ modul(Hp(x + shift)), distorze reference je hladká
+    return (
+        [Hp @ T],
+        [],
+        {
+            "prior": True,
+            "ecc": round(float(cc), 3),
+            "shift_px": [round(float(v), 1) for v in shift],
+        },
+    )
+
+
 def plane_support(pts: NDArray[np.float64], shape: tuple[int, int], scale: float) -> F32:
     """Okolí inlierů roviny (px reference → mřížka `shape` přes `scale`): homografie z části
     shod platí jen tam, jinde posunula blízký plot o stovky px (duch sloupku, 00204)."""
@@ -397,6 +551,8 @@ def build(
         planar = mod.camera[0] in PLANAR_ARRAYS
         if planar:
             hom = module_homography(ref, mod, ref_small, mod_small, (W, H), lum_scale)
+            if hom is None:
+                hom = prior_homography(ref, mod, ref_small, mod_small, (W, H))
             if hom is None:
                 stats[mod.camera] = {"skipped": "pose"}
                 continue
@@ -542,11 +698,16 @@ def build(
         )
         warped *= cgain
         if planar:
-            tone = tone_residual(canvas, warped, inside, TONE_SIGMA)
+            k = 2 * TONE_SAT_GROW + 1
+            near_sat = cv2.dilate((clipv >= SATURATION).astype(np.uint8), np.ones((k, k), np.uint8))
+            tone = tone_residual(canvas, warped, inside & (near_sat == 0), TONE_SIGMA)
+            del near_sat
             warped += cv2.resize(tone, (W * S, H * S), interpolation=cv2.INTER_LINEAR)
 
         feather = np.clip(edge / FEATHER_PX, 0, 1)
-        if planar:  # B4 vidí popředí jinde (paralaxa) – test proti základu nemá smysl
+        # B4 vidí popředí jinde (paralaxa) – test proti základu nemá u rovin ze shod smysl; záloha
+        # z kalibrace má jediný posun (00284: dům sedí, měsíc v nekonečnu ne) → test zůstává
+        if planar and not pstat.get("prior"):
             agree = np.ones_like(feather)
         else:
             wb = np.asarray(cv2.GaussianBlur(warped @ LUMA, (0, 0), 3.0), np.float32)
@@ -555,17 +716,34 @@ def build(
             del wb
         # mimo záběr plátno: hrana záběru (výplň −1) by v okně energie vypadala jako ostrý detail
         y_e = np.where(inside, warped @ LUMA, canvas @ LUMA).astype(np.float32)
-        fpow, ramp = focus_presence(detail_energy(y_e), base_e, e_floor)
-        del y_e
+        e_mod = detail_energy(y_e)
+        q = NOISE_SCALE
+        exc = noise_excess(
+            e_mod[q // 2 :: q, q // 2 :: q],
+            base_e[q // 2 :: q, q // 2 :: q],
+            base_blur[q // 2 :: q, q // 2 :: q],
+            inside[q // 2 :: q, q // 2 :: q],
+        )
+        pstat["noise_excess"] = round(float(np.median(exc)) / e_floor, 2)
+        pen = noise_penalty(float(np.median(exc)) / e_floor) if planar else 0.0
+        exc_full = cv2.resize(exc, (W * S, H * S), interpolation=cv2.INTER_LINEAR)
+        e_mod = np.maximum(e_mod - pen * exc_full, 0).astype(np.float32)
+        fpow, ramp = focus_presence(e_mod, base_e + pen * exc_full, e_floor)
+        del y_e, e_mod, exc_full
         focus = fpow * ramp
         # podíl saturace senzoru (develop.clip): saturace je v datech na úrovni zisku vinětace
         sat = clipv >= SATURATION
+        if pstat.get("prior"):
+            sat = grow_mask(sat, PRIOR_SAT_GROW)
         if planar:
-            soft = cv2.GaussianBlur(sat.astype(np.float32), (0, 0), SAT_SOFT)
+            sig = PRIOR_SAT_GROW / 4 if pstat.get("prior") else SAT_SOFT
+            soft = cv2.GaussianBlur(sat.astype(np.float32), (0, 0), sig)
             unsat = np.clip(1 - 2 * soft, 0, 1)
         else:
             unsat = (~sat).astype(np.float32)
         cover = feather * inside * unsat
+        if pstat.get("prior"):  # neshoda i do krytí: váha ostrosti (až 81) by slabou shodu přebila
+            cover = cover * agree
         w = (cover * agree * focus).astype(np.float32)
         stats[mod.camera] = {
             **pstat,

@@ -430,7 +430,9 @@ def build(
         )
         planar = mod.camera[0] in cpu_detail.PLANAR_ARRAYS
         if planar:
-            hom = cpu_detail.module_homography(ref, mod, ref_small, mod_small, (W, H), lum_scale)
+            hom = cpu_detail.module_homography(
+                ref, mod, ref_small, mod_small, (W, H), lum_scale
+            ) or cpu_detail.prior_homography(ref, mod, ref_small, mod_small, (W, H))
             pose = None if hom is None else ((hom[0], hom[1]), None, hom[2])
         else:
             pose = cpu_detail.module_pose(
@@ -520,7 +522,12 @@ def build(
         cgain = torch.stack([(cs[c][sel] / bs[c][sel].clamp_min(1e-6)).median() for c in range(3)])
         warped = warped * cgain.view(3, 1, 1)
         if planar:
-            tone = _tone_residual(canvas, warped, inside, cpu_detail.TONE_SIGMA)
+            k = 2 * cpu_detail.TONE_SAT_GROW + 1
+            near_sat = F.max_pool2d(
+                (clipv >= cpu_fusion.SATURATION).float()[None, None], k, stride=1, padding=k // 2
+            )[0, 0]
+            tone = _tone_residual(canvas, warped, inside & (near_sat == 0), cpu_detail.TONE_SIGMA)
+            del near_sat
             warped = (
                 warped
                 + F.interpolate(
@@ -529,14 +536,28 @@ def build(
             )
         feather = (edge / cpu_detail.FEATHER_PX).clamp(0, 1)
         y = (warped * LUMA).sum(0, keepdim=True)
-        if planar:  # B4 vidí popředí jinde (paralaxa) – test proti základu nemá smysl
+        # ≡ detail.build: rovina ze shod bez testu proti základu, záloha z kalibrace s ním
+        if planar and not pstat.get("prior"):
             agree = torch.ones_like(feather)
         else:
             sigma = torch.sqrt(0.002 * base_blur.clamp_min(0) + 1e-5) * 5.0
             agree = torch.exp(-(((_gauss(y, 3.0)[0] - base_blur) / sigma) ** 2))
         # mimo záběr plátno: hrana záběru (výplň −1) by v okně energie vypadala jako ostrý detail
         y_e = torch.where(inside[None], y, (canvas * LUMA).sum(0, keepdim=True))
-        r = torch.sqrt((_detail_energy(y_e) + e_floor) / (base_e + e_floor))
+        e_mod = _detail_energy(y_e)
+        q = cpu_detail.NOISE_SCALE
+        exc = cpu_detail.noise_excess(
+            _np(e_mod[None, q // 2 :: q, q // 2 :: q]),
+            _np(base_e[None, q // 2 :: q, q // 2 :: q]),
+            _np(base_blur[None, q // 2 :: q, q // 2 :: q]),
+            inside[q // 2 :: q, q // 2 :: q].cpu().numpy(),
+        )
+        pstat["noise_excess"] = round(float(np.median(exc)) / e_floor, 2)
+        pen = cpu_detail.noise_penalty(float(np.median(exc)) / e_floor) if planar else 0.0
+        exc_t = F.interpolate(_t(exc)[None], size=(H * S, W * S), mode="bilinear")[0, 0]
+        e_mod = (e_mod - pen * exc_t).clamp_min(0)
+        r = torch.sqrt((e_mod + e_floor) / (base_e + pen * exc_t + e_floor))
+        del e_mod, exc_t
         t = ((r - (cpu_detail.FOCUS_MIN - cpu_detail.FOCUS_RAMP)) / cpu_detail.FOCUS_RAMP).clamp(
             0, 1
         )
@@ -544,11 +565,16 @@ def build(
         focus = r.clamp(0, cpu_detail.FOCUS_MAX) ** cpu_detail.FOCUS_POWER * ramp
         del r, t, y
         sat = (clipv >= cpu_fusion.SATURATION).float()[None]
+        if pstat.get("prior"):  # ≡ detail.build: záloha z kalibrace i se září
+            sat = _t(cpu_detail.grow_mask(sat[0].bool().cpu().numpy(), cpu_detail.PRIOR_SAT_GROW))
         if planar:
-            unsat = (1 - 2 * _gauss(sat, cpu_detail.SAT_SOFT)[0]).clamp(0, 1)
+            sig = cpu_detail.PRIOR_SAT_GROW / 4 if pstat.get("prior") else cpu_detail.SAT_SOFT
+            unsat = (1 - 2 * _gauss(sat, sig)[0]).clamp(0, 1)
         else:
             unsat = 1 - sat[0]
         cover = feather * inside * unsat
+        if pstat.get("prior"):  # ≡ detail.build
+            cover = cover * agree
         wgt = cover * agree * focus
         stats[mod.camera] = {
             **pstat,
