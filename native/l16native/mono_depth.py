@@ -143,7 +143,12 @@ def refine(
     al = np.maximum(a * m + b, 0).astype(np.float32)
     out = _local_correction(al, inv, conf)
     sel = conf > 0.5
-    ref_med = float(np.median(inv[sel])) if sel.any() else 1.0
+    ref_med = float(np.median(inv[sel])) if sel.any() else 0.0
+    if ref_med <= 1e-6:
+        # spolehlivé pixely jen v nekonečnu (obloha, noc) → relativní chyba nemá smysl
+        stats = {"model": MODEL_ID, "used": False, "reason": "no_finite_depth"}
+        log.info("mono_depth", **stats)
+        return None, stats
     stats = {
         "model": MODEL_ID,
         "scale": round(a, 4),
