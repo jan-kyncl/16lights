@@ -6,8 +6,10 @@ přímo do adresáře snímku; přes HTTP jdou jen ID a souhrny.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
+import threading
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -31,6 +33,19 @@ log = structlog.get_logger()
 DATA = Path(os.environ.get("L16_DATA_DIR", Path(__file__).resolve().parents[2] / "data"))
 app = FastAPI(title="L16 native")
 cam = camera.Camera()
+
+# PyTorch MPS není thread-safe: souběžné požadavky (víc workerů) shodí proces na Metal
+# assertion. GPU volání se proto řadí za sebe, CPU části endpointů běží paralelně.
+_gpu_lock = threading.RLock()
+
+
+def _gpu(fn: Any) -> Any:
+    @functools.wraps(fn)
+    def run(*args: Any, **kwargs: Any) -> Any:
+        with _gpu_lock:
+            return fn(*args, **kwargs)
+
+    return run
 
 
 def shot_dir(shot_id: str) -> Path:
@@ -125,11 +140,11 @@ def depth(shot_id: str, body: dict[str, Any]) -> dict[str, Any]:
             mask = unorient(m, hold)
 
     def refine(ref_img: Any, inv: Any, conf: Any) -> Any:
-        return mono_depth.refine(ref_img, inv, conf, hold)
+        return _gpu(mono_depth.refine)(ref_img, inv, conf, hold)
 
     summary = shot.process_depth(
         d,
-        estimate=gpu_depth.estimate,
+        estimate=_gpu(gpu_depth.estimate),
         person_mask=mask,
         refine=refine if body.get("mono", True) else None,
     )
@@ -164,7 +179,7 @@ def fusion_ep(shot_id: str, body: dict[str, Any]) -> dict[str, Any]:
         calib,
         (int(pv["height"]), int(pv["width"])),
         body["depth"],
-        fuse_fn=gpu_ops.fuse,
+        fuse_fn=_gpu(gpu_ops.fuse),
     )
     if out is None:
         raise HTTPException(409, "nothing to fuse")
@@ -175,7 +190,7 @@ def fusion_ep(shot_id: str, body: dict[str, Any]) -> dict[str, Any]:
 def hires_ep(shot_id: str) -> dict[str, Any]:
     """Detail z B modulů na GPU (shot.process_hires s gpu_ops.build); zapisuje meta.json."""
     d = shot_dir(shot_id)
-    return shot.process_hires(d, DATA / "devices", build_fn=gpu_ops.build)
+    return shot.process_hires(d, DATA / "devices", build_fn=_gpu(gpu_ops.build))
 
 
 @app.post("/export/{shot_id}")
@@ -188,7 +203,7 @@ def export_ep(shot_id: str, body: dict[str, Any]) -> Response:
         Edits.from_dict(body.get("edits")),
         fmt,
         hires=body.get("resolution") == "hires",
-        refocus_fn=gpu_ops.refocus,
+        refocus_fn=_gpu(gpu_ops.refocus),
     )
     return Response(data, media_type=export.MIME[fmt])
 
