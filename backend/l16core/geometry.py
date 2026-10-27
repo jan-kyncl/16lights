@@ -297,10 +297,11 @@ def match_features(
         des.append(d)
     if des[0] is None or des[1] is None:
         return np.zeros((0, 2)), np.zeros((0, 2))
+    # knnMatch vrací < 2 sousedy, když má druhý obraz < 2 body (tma, beztvará plocha)
     good = [
-        (m.queryIdx, m.trainIdx)
-        for m, n in cv2.BFMatcher(cv2.NORM_L2).knnMatch(des[0], des[1], k=2)
-        if m.distance < 0.75 * n.distance
+        (mn[0].queryIdx, mn[0].trainIdx)
+        for mn in cv2.BFMatcher(cv2.NORM_L2).knnMatch(des[0], des[1], k=2)
+        if len(mn) == 2 and mn[0].distance < 0.75 * mn[1].distance
     ]
     if not good:
         return np.zeros((0, 2)), np.zeros((0, 2))

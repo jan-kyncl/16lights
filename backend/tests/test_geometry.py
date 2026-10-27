@@ -6,7 +6,7 @@ from mizukage import Orientation
 from scipy.spatial.transform import Rotation
 
 from l16core.develop import orient
-from l16core.geometry import ModuleGeometry, epipolar_errors, orient_uv, plane_map
+from l16core.geometry import ModuleGeometry, epipolar_errors, match_features, orient_uv, plane_map
 
 
 def module(
@@ -119,3 +119,13 @@ def test_orientation_compose_and_gravity() -> None:
     assert compose("NORMAL", 90) == "ROT90_CCW"
     assert compose(None, 180) == "ROT180"
     assert GRAVITY_AXES[(0, 1)] == "NORMAL" and GRAVITY_AXES[(-1, 0)] == "ROT90_CCW"
+
+
+def test_match_features_single_keypoint() -> None:
+    """Obraz s jediným SIFT bodem nesmí shodit párování (knnMatch vrátí 1 souseda)."""
+    rng = np.random.default_rng(0)
+    a = rng.random((240, 320, 3)).astype(np.float32)
+    b = np.zeros((240, 320, 3), np.float32)
+    b[100:110, 150:160] = 1.0
+    p1, p2 = match_features(a, b, 320)
+    assert p1.shape == p2.shape
