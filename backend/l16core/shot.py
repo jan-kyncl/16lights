@@ -268,6 +268,9 @@ DETAIL_ARRAY = {"A": "B", "B": "C"}
 # disparity mezi rovinami zůstal stejný (tele moduly stejně neostří tak blízko).
 DEPTH_NEAR_MM_A = 300.0
 F_PX_A = 3375.0
+# zpřesnění hloubky (Depth Pro) se zahodí, když víc pixelů leží za nejbližší rovinou sweepu
+REFINE_RANGE_TOL = 0.02
+REFINE_MAX_BEYOND = 0.05
 
 
 def same_array(ref: str, cam: str) -> bool:
@@ -401,7 +404,15 @@ def process_depth(
         )
         out, refined = refine(ref_img, inv, res.confidence)
         if out is not None:
-            inv = np.clip(out, 0, float(res.planes_inv[-1])).astype(np.float32)
+            # chyba se měří jen na spolehlivých pixelech; mimo ně může afinní fit mono hloubky
+            # ujet za nejbližší rovinu (makro 00365: 66 % pixelů na ořezu → duchové ve fúzi)
+            top = float(res.planes_inv[-1])
+            beyond = float(np.mean(out > top * (1 + REFINE_RANGE_TOL)))
+            refined = {**(refined or {}), "beyond_range_pct": round(100 * beyond, 2)}
+            if beyond > REFINE_MAX_BEYOND:
+                refined.update(used=False, reason="beyond_sweep_range")
+            else:
+                inv = np.clip(out, 0, top).astype(np.float32)
     else:
         (shot_dir / "depth_sweep.f16").unlink(missing_ok=True)
     np.ascontiguousarray(np.stack([inv, res.confidence], -1), dtype="<f2").tofile(
