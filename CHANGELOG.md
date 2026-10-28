@@ -5,6 +5,20 @@ whole repo: `backend/pyproject.toml` is the source, `native/pyproject.toml` and
 `frontend/package.json` must match (checked by a test). Every shot records the version that
 processed it (`meta.json` → `version`), shown in the editor's info panel.
 
+## Unreleased
+
+- **Ghosts on close-ups fixed**: the Depth Pro refinement could push most of the depth map past
+  the sweep's nearest plane (0.3 m) when only a few pixels were reliable; fusion then warped the
+  modules by the wrong depth (macro 00365: the whole image doubled). The refinement is now dropped
+  when more than 5 % of it lies beyond the sweep range (`meta.depth.refine.reason`); 31 shots in
+  the library were affected.
+- **Fusion structure check**: each aligned module is compared with the reference by local NCC;
+  mismatching areas are masked out and a module that mostly mismatches is dropped
+  (`per_module.mismatch_pct`). Catches wrong alignment the Wiener merge cannot see, and occluded
+  or blurred modules.
+- **Benchmark** (`tools/bench/`): fixed set of 23 shots against lux and the camera JPEG; noise,
+  detail, ghosts, ΔE00, HTML report with 1:1 crops, results per version in `tools/bench/results/`.
+
 ## 0.4.0 – 2026-10-26
 
 Tele quality: robust C mosaic, sharpening, black point, night tele and focal length crop.

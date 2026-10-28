@@ -1,6 +1,6 @@
 # Roadmap & TODO
 
-Updated 2026-10-23.
+Updated 2026-10-28.
 
 ## Plan: better than lux / Lumen (from the comparison of 2026-10-22)
 
@@ -61,7 +61,11 @@ are 3× faster. Ordered by impact:
 7. [ ] **Depth as an output**: full resolution, GDepth and HEIC depth export (refocus in iPhone
        Photos), interactive parallax / 3D view in the browser
 8. [ ] **Learned L16 denoiser** (DGX Spark): Noise2Noise on aligned module and stack pairs
-9. [ ] **Automated benchmark** against lux on a fixed shot set after every change
+9. [x] **Automated benchmark** against lux and the camera JPEG on a fixed set of 23 shots
+       (`tools/bench/`, 2026-10-28): noise, detail, ghosts, ΔE00 vs. camera. First result (v0.4.0):
+       noise ½ of lux on 20/22 shots, no ghosts, but **detail 15 % below lux on 21/22** at the same
+       output size and **ΔE00 to the camera 4.0 vs. lux 2.7** (night 7.7–8.6 vs. 1.6) → the next
+       targets are detail (Bayer SR, step A) and night colour/tone
 
 ## Milestones
 

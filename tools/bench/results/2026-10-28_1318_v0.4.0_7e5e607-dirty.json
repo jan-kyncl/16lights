@@ -1,0 +1,2200 @@
+{
+ "run": "2026-10-28_1318_v0.4.0_7e5e607-dirty",
+ "version": "0.4.0",
+ "git": "7e5e607-dirty",
+ "label": "v0.4.0 + refine guard + fusion structure guard",
+ "created": "2026-10-28T13:20:35",
+ "summary": {
+  "ours": {
+   "noise": 0.4267,
+   "noise_shadow": 0.435,
+   "noise_mid": 0.508,
+   "noise_bright": 0.3718,
+   "detail": 0.4926,
+   "ghost_pct": 0.0,
+   "de00_med": 4.0449,
+   "de00_p90": 6.6393,
+   "dL": -1.5578,
+   "clip_pct": 5.9212,
+   "crush_pct": 0.0
+  },
+  "single": {
+   "noise": 1.5,
+   "noise_shadow": 1.8209,
+   "noise_mid": 1.6962,
+   "noise_bright": 1.1135,
+   "detail": 0.4855,
+   "ghost_pct": null,
+   "de00_med": 4.2112,
+   "de00_p90": 7.0203,
+   "dL": -1.6206,
+   "clip_pct": 5.2321,
+   "crush_pct": 0.0111
+  },
+  "lux": {
+   "noise": 0.7943,
+   "noise_shadow": 0.7943,
+   "noise_mid": 0.8298,
+   "noise_bright": 0.6361,
+   "detail": 0.6022,
+   "ghost_pct": 12.5793,
+   "de00_med": 2.6608,
+   "de00_p90": 7.1814,
+   "dL": 2.3621,
+   "clip_pct": 14.6616,
+   "crush_pct": 0.0005
+  },
+  "camera": {
+   "noise": 1.179,
+   "noise_shadow": 1.0051,
+   "noise_mid": 1.4362,
+   "noise_bright": 1.0819,
+   "detail": 0.6102,
+   "ghost_pct": 0.5854,
+   "de00_med": null,
+   "de00_p90": null,
+   "dL": null,
+   "clip_pct": 12.3373,
+   "crush_pct": 0.0962
+  },
+  "ours_vs_lux": {
+   "noise": {
+    "ours_better": 20,
+    "n": 22,
+    "median_ratio": 0.509
+   },
+   "noise_shadow": {
+    "ours_better": 19,
+    "n": 21,
+    "median_ratio": 0.477
+   },
+   "detail": {
+    "ours_better": 1,
+    "n": 22,
+    "median_ratio": 0.854
+   },
+   "ghost_pct": {
+    "ours_better": 22,
+    "n": 22,
+    "median_ratio": 0.0
+   },
+   "de00_med": {
+    "ours_better": 5,
+    "n": 21,
+    "median_ratio": 1.495
+   }
+  }
+ },
+ "shots": [
+  {
+   "name": "L16_00750",
+   "tags": [
+    "day",
+    "detail"
+   ],
+   "shot_id": "ffae4460a240",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.516,
+     "noise_mid": 0.1994,
+     "noise_bright": 0.1999,
+     "noise": 0.274,
+     "detail": 0.6643,
+     "ghost_pct": 0.0,
+     "de00_med": 4.2004,
+     "de00_p90": 6.6614,
+     "dL": -2.8428,
+     "dC": -0.9663,
+     "clip_pct": 6.5982,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 1.6739,
+     "noise_mid": 1.1191,
+     "noise_bright": 0.9968,
+     "noise": 1.2314,
+     "detail": 0.606,
+     "de00_med": 4.1609,
+     "de00_p90": 6.7193,
+     "dL": -2.7258,
+     "dC": -0.6954,
+     "clip_pct": 6.6717,
+     "crush_pct": 0.0
+    },
+    "lux": {
+     "noise_shadow": 1.1773,
+     "noise_mid": 0.4751,
+     "noise_bright": 0.4615,
+     "noise": 0.6367,
+     "detail": 0.772,
+     "ghost_pct": 21.2029,
+     "de00_med": 2.6608,
+     "de00_p90": 8.4371,
+     "dL": 2.3621,
+     "dC": 0.569,
+     "clip_pct": 32.7912,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 1.0742,
+     "noise_mid": 0.7041,
+     "noise_bright": 0.6901,
+     "noise": 0.8052,
+     "detail": 0.7529,
+     "ghost_pct": 0.5854,
+     "clip_pct": 30.9096,
+     "crush_pct": 0.0
+    }
+   },
+   "render_s": 9.2,
+   "process_s": 73.3,
+   "size": [
+    4015,
+    3012
+   ],
+   "lux_inliers": 1957,
+   "camera_inliers": 2854,
+   "valid_pct": 98.6,
+   "crops": [
+    {
+     "x": 3072,
+     "y": 192,
+     "kind": "detail"
+    },
+    {
+     "x": 3456,
+     "y": 1728,
+     "kind": "detail"
+    },
+    {
+     "x": 2688,
+     "y": 2496,
+     "kind": "detail"
+    },
+    {
+     "x": 2112,
+     "y": 1536,
+     "kind": "flat dark"
+    },
+    {
+     "x": 960,
+     "y": 1728,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 16.5
+  },
+  {
+   "name": "L16_00406",
+   "tags": [
+    "day",
+    "detail"
+   ],
+   "shot_id": "c32e365b4386",
+   "renderers": {
+    "ours": {
+     "noise_shadow": null,
+     "noise_mid": 0.5292,
+     "noise_bright": 0.4351,
+     "noise": 0.4798,
+     "detail": 0.9511,
+     "ghost_pct": 0.0,
+     "de00_med": 5.0594,
+     "de00_p90": 6.9814,
+     "dL": -3.5288,
+     "dC": 0.8203,
+     "clip_pct": 41.2741,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": null,
+     "noise_mid": 1.5476,
+     "noise_bright": 1.2687,
+     "noise": 1.4012,
+     "detail": 0.7701,
+     "de00_med": 5.018,
+     "de00_p90": 7.1551,
+     "dL": -3.4352,
+     "dC": 1.4998,
+     "clip_pct": 39.9784,
+     "crush_pct": 0.0
+    },
+    "lux": {
+     "noise_shadow": null,
+     "noise_mid": 2.0192,
+     "noise_bright": 1.583,
+     "noise": 1.7878,
+     "detail": 1.1734,
+     "ghost_pct": 23.1738,
+     "de00_med": 2.8995,
+     "de00_p90": 7.8324,
+     "dL": 1.4166,
+     "dC": 0.4258,
+     "clip_pct": 42.0591,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": null,
+     "noise_mid": 2.2655,
+     "noise_bright": 1.7006,
+     "noise": 1.9628,
+     "detail": 1.025,
+     "ghost_pct": 1.6957,
+     "clip_pct": 42.108,
+     "crush_pct": 0.0
+    }
+   },
+   "render_s": 9.3,
+   "process_s": 67.7,
+   "size": [
+    3235,
+    2426
+   ],
+   "lux_inliers": 2099,
+   "camera_inliers": 2700,
+   "valid_pct": 92.0,
+   "crops": [
+    {
+     "x": 2112,
+     "y": 1920,
+     "kind": "detail"
+    },
+    {
+     "x": 2496,
+     "y": 1920,
+     "kind": "detail"
+    },
+    {
+     "x": 1152,
+     "y": 1920,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 14.5
+  },
+  {
+   "name": "L16_00740",
+   "tags": [
+    "day",
+    "detail",
+    "people"
+   ],
+   "shot_id": "c0ab31b77481",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.1818,
+     "noise_mid": 0.9985,
+     "noise_bright": 0.8085,
+     "noise": 0.5275,
+     "detail": 0.621,
+     "ghost_pct": 0.0,
+     "de00_med": 4.2849,
+     "de00_p90": 7.435,
+     "dL": -0.8235,
+     "dC": -0.9299,
+     "clip_pct": 17.3012,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 1.1595,
+     "noise_mid": 1.8155,
+     "noise_bright": 1.4062,
+     "noise": 1.4359,
+     "detail": 0.5484,
+     "de00_med": 4.2112,
+     "de00_p90": 7.1109,
+     "dL": -0.8123,
+     "dC": -0.2913,
+     "clip_pct": 15.73,
+     "crush_pct": 0.0
+    },
+    "lux": {
+     "noise_shadow": 0.5669,
+     "noise_mid": 2.8289,
+     "noise_bright": 1.9398,
+     "noise": 1.4598,
+     "detail": 0.6929,
+     "ghost_pct": 11.8889,
+     "de00_med": 4.3379,
+     "de00_p90": 9.7221,
+     "dL": 3.9152,
+     "dC": 0.2449,
+     "clip_pct": 34.7733,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 0.7528,
+     "noise_mid": 2.8427,
+     "noise_bright": 2.2233,
+     "noise": 1.6819,
+     "detail": 0.6413,
+     "ghost_pct": 0.3647,
+     "clip_pct": 28.1988,
+     "crush_pct": 0.0
+    }
+   },
+   "render_s": 9.2,
+   "process_s": 79.4,
+   "size": [
+    2496,
+    3328
+   ],
+   "lux_inliers": 2671,
+   "camera_inliers": 3500,
+   "valid_pct": 97.4,
+   "crops": [
+    {
+     "x": 1536,
+     "y": 1152,
+     "kind": "detail"
+    },
+    {
+     "x": 192,
+     "y": 1728,
+     "kind": "detail"
+    },
+    {
+     "x": 192,
+     "y": 384,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 14.8
+  },
+  {
+   "name": "L16_00641",
+   "tags": [
+    "day",
+    "detail",
+    "color"
+   ],
+   "shot_id": "2944f9bb96eb",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 1.2021,
+     "noise_mid": 0.6568,
+     "noise_bright": 0.5218,
+     "noise": 0.7441,
+     "detail": 0.4405,
+     "ghost_pct": 0.0,
+     "de00_med": 5.7727,
+     "de00_p90": 8.3693,
+     "dL": -5.2454,
+     "dC": 0.7999,
+     "clip_pct": 5.9212,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 2.9999,
+     "noise_mid": 2.2424,
+     "noise_bright": 1.5645,
+     "noise": 2.1915,
+     "detail": 0.4411,
+     "de00_med": 6.3935,
+     "de00_p90": 9.4655,
+     "dL": -5.4227,
+     "dC": 3.3748,
+     "clip_pct": 5.2321,
+     "crush_pct": 0.0
+    },
+    "lux": {
+     "noise_shadow": 2.6201,
+     "noise_mid": 1.4341,
+     "noise_bright": 1.0099,
+     "noise": 1.5597,
+     "detail": 0.5712,
+     "ghost_pct": 19.7292,
+     "de00_med": 2.7717,
+     "de00_p90": 8.068,
+     "dL": 2.7081,
+     "dC": 0.9175,
+     "clip_pct": 19.6532,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 2.1984,
+     "noise_mid": 2.0336,
+     "noise_bright": 1.4547,
+     "noise": 1.8666,
+     "detail": 0.5747,
+     "ghost_pct": 0.0158,
+     "clip_pct": 19.3273,
+     "crush_pct": 0.0
+    }
+   },
+   "render_s": 9.5,
+   "process_s": 52.1,
+   "size": [
+    4160,
+    3120
+   ],
+   "lux_inliers": 2746,
+   "camera_inliers": 3396,
+   "valid_pct": 98.3,
+   "crops": [
+    {
+     "x": 1152,
+     "y": 1728,
+     "kind": "detail"
+    },
+    {
+     "x": 1920,
+     "y": 2304,
+     "kind": "detail"
+    },
+    {
+     "x": 2496,
+     "y": 1152,
+     "kind": "detail"
+    },
+    {
+     "x": 768,
+     "y": 1152,
+     "kind": "flat dark"
+    }
+   ],
+   "bench_s": 17.2
+  },
+  {
+   "name": "L16_00648",
+   "tags": [
+    "day",
+    "color"
+   ],
+   "shot_id": "f8c583b5e463",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.7252,
+     "noise_mid": 0.508,
+     "noise_bright": 0.2109,
+     "noise": 0.4267,
+     "detail": 0.4416,
+     "ghost_pct": 0.0,
+     "de00_med": 4.0202,
+     "de00_p90": 6.1874,
+     "dL": -2.9224,
+     "dC": 0.455,
+     "clip_pct": 0.6143,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 2.5507,
+     "noise_mid": 2.0172,
+     "noise_bright": 0.9843,
+     "noise": 1.7173,
+     "detail": 0.4957,
+     "de00_med": 4.3685,
+     "de00_p90": 6.6512,
+     "dL": -3.0467,
+     "dC": 1.6046,
+     "clip_pct": 0.6161,
+     "crush_pct": 0.0
+    },
+    "lux": {
+     "noise_shadow": 1.2224,
+     "noise_mid": 1.0279,
+     "noise_bright": 0.4447,
+     "noise": 0.8237,
+     "detail": 0.5114,
+     "ghost_pct": 11.3423,
+     "de00_med": 1.7642,
+     "de00_p90": 7.8022,
+     "dL": 3.3476,
+     "dC": 0.2584,
+     "clip_pct": 10.7658,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 0.8124,
+     "noise_mid": 1.5149,
+     "noise_bright": 0.6628,
+     "noise": 0.9343,
+     "detail": 0.6102,
+     "ghost_pct": 0.902,
+     "clip_pct": 3.5228,
+     "crush_pct": 0.0078
+    }
+   },
+   "render_s": 9.6,
+   "process_s": 57.5,
+   "size": [
+    3120,
+    4160
+   ],
+   "lux_inliers": 2616,
+   "camera_inliers": 3205,
+   "valid_pct": 98.3,
+   "crops": [
+    {
+     "x": 192,
+     "y": 1536,
+     "kind": "detail"
+    },
+    {
+     "x": 960,
+     "y": 2496,
+     "kind": "detail"
+    },
+    {
+     "x": 2496,
+     "y": 1344,
+     "kind": "detail"
+    },
+    {
+     "x": 1728,
+     "y": 1152,
+     "kind": "flat dark"
+    },
+    {
+     "x": 384,
+     "y": 3456,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 17.4
+  },
+  {
+   "name": "L16_00365",
+   "tags": [
+    "day",
+    "macro",
+    "detail"
+   ],
+   "shot_id": "70ecff6fa127",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 3.0571,
+     "noise_mid": 2.7018,
+     "noise_bright": 1.784,
+     "noise": 2.4516,
+     "detail": 0.4416,
+     "ghost_pct": 0.0,
+     "de00_med": 3.8147,
+     "de00_p90": 7.2852,
+     "dL": 0.4867,
+     "dC": 0.7931,
+     "clip_pct": 1.4869,
+     "crush_pct": 0.0178
+    },
+    "single": {
+     "noise_shadow": 2.3878,
+     "noise_mid": 2.2327,
+     "noise_bright": 1.646,
+     "noise": 2.0627,
+     "detail": 0.4085,
+     "de00_med": 3.8862,
+     "de00_p90": 7.4316,
+     "dL": 0.5676,
+     "dC": 0.9304,
+     "clip_pct": 1.4793,
+     "crush_pct": 0.0111
+    },
+    "lux": {
+     "noise_shadow": 1.2214,
+     "noise_mid": 1.1943,
+     "noise_bright": 1.3744,
+     "noise": 1.261,
+     "detail": 0.4824,
+     "ghost_pct": 19.2821,
+     "de00_med": 3.3357,
+     "de00_p90": 10.6436,
+     "dL": 2.6026,
+     "dC": 0.2321,
+     "clip_pct": 4.3651,
+     "crush_pct": 0.0166
+    },
+    "camera": {
+     "noise_shadow": 1.9151,
+     "noise_mid": 2.1164,
+     "noise_bright": 2.0245,
+     "noise": 2.017,
+     "detail": 0.4914,
+     "ghost_pct": 0.0,
+     "clip_pct": 2.4365,
+     "crush_pct": 0.3569
+    }
+   },
+   "render_s": 10.1,
+   "process_s": 55.9,
+   "size": [
+    4160,
+    3120
+   ],
+   "lux_inliers": 2832,
+   "camera_inliers": 4334,
+   "valid_pct": 98.2,
+   "crops": [
+    {
+     "x": 576,
+     "y": 960,
+     "kind": "detail"
+    },
+    {
+     "x": 3264,
+     "y": 192,
+     "kind": "detail"
+    },
+    {
+     "x": 3456,
+     "y": 1920,
+     "kind": "detail"
+    },
+    {
+     "x": 1920,
+     "y": 2688,
+     "kind": "flat dark"
+    },
+    {
+     "x": 1728,
+     "y": 1152,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 18.0
+  },
+  {
+   "name": "L16_00619",
+   "tags": [
+    "hdr"
+   ],
+   "shot_id": "cdaa7b3c6140",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.225,
+     "noise_mid": 0.1597,
+     "noise_bright": 0.1699,
+     "noise": 0.1828,
+     "detail": 0.1918,
+     "ghost_pct": 0.0,
+     "de00_med": 4.7725,
+     "de00_p90": 7.4688,
+     "dL": -3.9651,
+     "dC": -2.0817,
+     "clip_pct": 18.086,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 1.6976,
+     "noise_mid": 0.9799,
+     "noise_bright": 0.942,
+     "noise": 1.1615,
+     "detail": 0.2402,
+     "de00_med": 4.8798,
+     "de00_p90": 7.4542,
+     "dL": -4.1058,
+     "dC": -1.8346,
+     "clip_pct": 18.0798,
+     "crush_pct": 0.0
+    },
+    "lux": {
+     "noise_shadow": 0.5758,
+     "noise_mid": 0.4382,
+     "noise_bright": 0.3293,
+     "noise": 0.4364,
+     "detail": 0.0,
+     "ghost_pct": 14.8351,
+     "de00_med": 1.2157,
+     "de00_p90": 1.9414,
+     "dL": 1.6428,
+     "dC": -0.0275,
+     "clip_pct": 23.2381,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 0.8096,
+     "noise_mid": 0.6823,
+     "noise_bright": 0.5293,
+     "noise": 0.6637,
+     "detail": 0.2235,
+     "ghost_pct": 5.0368,
+     "clip_pct": 21.7678,
+     "crush_pct": 0.0
+    }
+   },
+   "render_s": 9.3,
+   "process_s": 53.7,
+   "size": [
+    2496,
+    3328
+   ],
+   "lux_inliers": 40,
+   "camera_inliers": 48,
+   "valid_pct": 97.1,
+   "crops": [
+    {
+     "x": 1536,
+     "y": 768,
+     "kind": "detail"
+    },
+    {
+     "x": 960,
+     "y": 576,
+     "kind": "detail"
+    },
+    {
+     "x": 1536,
+     "y": 2496,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 14.4
+  },
+  {
+   "name": "L16_00748",
+   "tags": [
+    "hdr",
+    "detail"
+   ],
+   "shot_id": "65b4077f0ad8",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.2859,
+     "noise_mid": 0.2102,
+     "noise_bright": 0.3916,
+     "noise": 0.2866,
+     "detail": 0.666,
+     "ghost_pct": 0.0,
+     "de00_med": 4.1606,
+     "de00_p90": 6.6393,
+     "dL": 0.6575,
+     "dC": -0.3439,
+     "clip_pct": 14.2826,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 1.7372,
+     "noise_mid": 1.2938,
+     "noise_bright": 1.1135,
+     "noise": 1.3577,
+     "detail": 0.6076,
+     "de00_med": 3.9395,
+     "de00_p90": 6.5267,
+     "dL": 0.7102,
+     "dC": 0.1062,
+     "clip_pct": 14.3179,
+     "crush_pct": 0.0
+    },
+    "lux": {
+     "noise_shadow": 0.7943,
+     "noise_mid": 0.5443,
+     "noise_bright": 1.1845,
+     "noise": 0.8,
+     "detail": 0.7801,
+     "ghost_pct": 17.7111,
+     "de00_med": 4.3935,
+     "de00_p90": 7.9692,
+     "dL": 4.4845,
+     "dC": 0.4631,
+     "clip_pct": 18.2721,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 0.996,
+     "noise_mid": 0.8283,
+     "noise_bright": 1.4653,
+     "noise": 1.0653,
+     "detail": 0.7782,
+     "ghost_pct": 0.0,
+     "clip_pct": 15.8774,
+     "crush_pct": 0.0061
+    }
+   },
+   "render_s": 9.0,
+   "process_s": 56.8,
+   "size": [
+    4160,
+    3120
+   ],
+   "lux_inliers": 2086,
+   "camera_inliers": 3278,
+   "valid_pct": 98.8,
+   "crops": [
+    {
+     "x": 3072,
+     "y": 576,
+     "kind": "detail"
+    },
+    {
+     "x": 384,
+     "y": 384,
+     "kind": "detail"
+    },
+    {
+     "x": 768,
+     "y": 384,
+     "kind": "detail"
+    },
+    {
+     "x": 2112,
+     "y": 1920,
+     "kind": "flat dark"
+    },
+    {
+     "x": 1152,
+     "y": 2112,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 16.5
+  },
+  {
+   "name": "L16_00739",
+   "tags": [
+    "hdr",
+    "detail"
+   ],
+   "shot_id": "d850a2de17dd",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.2627,
+     "noise_mid": 0.3751,
+     "noise_bright": 0.3164,
+     "noise": 0.3147,
+     "detail": 0.4237,
+     "ghost_pct": 0.0,
+     "de00_med": 3.1088,
+     "de00_p90": 5.1913,
+     "dL": 0.5176,
+     "dC": -0.643,
+     "clip_pct": 13.2174,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 1.6699,
+     "noise_mid": 1.382,
+     "noise_bright": 1.0435,
+     "noise": 1.3404,
+     "detail": 0.4145,
+     "de00_med": 3.4575,
+     "de00_p90": 5.9472,
+     "dL": 0.3209,
+     "dC": -0.2857,
+     "clip_pct": 13.3608,
+     "crush_pct": 0.0127
+    },
+    "lux": {
+     "noise_shadow": 0.6691,
+     "noise_mid": 0.4361,
+     "noise_bright": 0.4437,
+     "noise": 0.5059,
+     "detail": 0.5487,
+     "ghost_pct": 7.2358,
+     "de00_med": 1.4746,
+     "de00_p90": 3.1873,
+     "dL": 1.2146,
+     "dC": -0.0845,
+     "clip_pct": 21.921,
+     "crush_pct": 0.0397
+    },
+    "camera": {
+     "noise_shadow": 0.8882,
+     "noise_mid": 0.7621,
+     "noise_bright": 0.6379,
+     "noise": 0.7558,
+     "detail": 0.501,
+     "ghost_pct": 0.2421,
+     "clip_pct": 18.0666,
+     "crush_pct": 0.365
+    }
+   },
+   "render_s": 9.5,
+   "process_s": 57.9,
+   "size": [
+    2496,
+    3328
+   ],
+   "lux_inliers": 1902,
+   "camera_inliers": 3073,
+   "valid_pct": 97.2,
+   "crops": [
+    {
+     "x": 1344,
+     "y": 960,
+     "kind": "detail"
+    },
+    {
+     "x": 1536,
+     "y": 1920,
+     "kind": "detail"
+    },
+    {
+     "x": 192,
+     "y": 1152,
+     "kind": "detail"
+    },
+    {
+     "x": 960,
+     "y": 2112,
+     "kind": "flat dark"
+    },
+    {
+     "x": 384,
+     "y": 1536,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 14.8
+  },
+  {
+   "name": "L16_00542",
+   "tags": [
+    "hdr",
+    "people",
+    "indoor"
+   ],
+   "shot_id": "dac2e2b6d5a6",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.2951,
+     "noise_mid": 0.6977,
+     "noise_bright": 0.5548,
+     "noise": 0.4852,
+     "detail": 0.4463,
+     "ghost_pct": 0.1978,
+     "de00_med": 3.9677,
+     "de00_p90": 6.4021,
+     "dL": -1.3248,
+     "dC": -1.7441,
+     "clip_pct": 13.4677,
+     "crush_pct": 0.0024
+    },
+    "single": {
+     "noise_shadow": 1.7647,
+     "noise_mid": 1.8445,
+     "noise_bright": 1.2753,
+     "noise": 1.6071,
+     "detail": 0.4112,
+     "de00_med": 4.5147,
+     "de00_p90": 7.8454,
+     "dL": -1.5338,
+     "dC": -1.7968,
+     "clip_pct": 13.1439,
+     "crush_pct": 0.2457
+    },
+    "lux": {
+     "noise_shadow": 0.6182,
+     "noise_mid": 0.5895,
+     "noise_bright": 0.5626,
+     "noise": 0.5897,
+     "detail": 0.5044,
+     "ghost_pct": 13.2696,
+     "de00_med": 2.7356,
+     "de00_p90": 5.8815,
+     "dL": -1.6136,
+     "dC": -1.9219,
+     "clip_pct": 14.8572,
+     "crush_pct": 1.4541
+    },
+    "camera": {
+     "noise_shadow": 1.1495,
+     "noise_mid": 0.9551,
+     "noise_bright": 0.9434,
+     "noise": 1.0118,
+     "detail": 0.5585,
+     "ghost_pct": 0.0387,
+     "clip_pct": 12.3373,
+     "crush_pct": 1.2316
+    }
+   },
+   "render_s": 9.1,
+   "process_s": 57.8,
+   "size": [
+    4160,
+    3120
+   ],
+   "lux_inliers": 3085,
+   "camera_inliers": 3399,
+   "valid_pct": 97.3,
+   "crops": [
+    {
+     "x": 1152,
+     "y": 1728,
+     "kind": "detail"
+    },
+    {
+     "x": 768,
+     "y": 1152,
+     "kind": "detail"
+    },
+    {
+     "x": 576,
+     "y": 768,
+     "kind": "detail"
+    },
+    {
+     "x": 3456,
+     "y": 1536,
+     "kind": "flat dark"
+    },
+    {
+     "x": 1920,
+     "y": 384,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 16.6
+  },
+  {
+   "name": "L16_00754",
+   "tags": [
+    "day",
+    "people",
+    "depth"
+   ],
+   "shot_id": "f7f669603e59",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.343,
+     "noise_mid": 0.811,
+     "noise_bright": 1.0727,
+     "noise": 0.6682,
+     "detail": 0.6594,
+     "ghost_pct": 0.0,
+     "de00_med": 4.5994,
+     "de00_p90": 6.7603,
+     "dL": -1.6228,
+     "dC": 0.144,
+     "clip_pct": 17.0016,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 1.6385,
+     "noise_mid": 1.886,
+     "noise_bright": 1.5844,
+     "noise": 1.6981,
+     "detail": 0.576,
+     "de00_med": 4.7633,
+     "de00_p90": 7.0153,
+     "dL": -1.6295,
+     "dC": 0.4457,
+     "clip_pct": 16.5868,
+     "crush_pct": 0.0
+    },
+    "lux": {
+     "noise_shadow": 0.7492,
+     "noise_mid": 1.4596,
+     "noise_bright": 2.0519,
+     "noise": 1.3092,
+     "detail": 0.7677,
+     "ghost_pct": 8.603,
+     "de00_med": 3.1443,
+     "de00_p90": 6.3236,
+     "dL": 2.601,
+     "dC": 0.2306,
+     "clip_pct": 41.0004,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 0.9679,
+     "noise_mid": 1.9949,
+     "noise_bright": 2.6879,
+     "noise": 1.7314,
+     "detail": 0.7545,
+     "ghost_pct": 0.4329,
+     "clip_pct": 39.1973,
+     "crush_pct": 0.0964
+    }
+   },
+   "render_s": 10.2,
+   "process_s": 54.5,
+   "size": [
+    3012,
+    4015
+   ],
+   "lux_inliers": 3048,
+   "camera_inliers": 3431,
+   "valid_pct": 97.4,
+   "crops": [
+    {
+     "x": 2496,
+     "y": 2304,
+     "kind": "detail"
+    },
+    {
+     "x": 2112,
+     "y": 2496,
+     "kind": "detail"
+    },
+    {
+     "x": 2496,
+     "y": 2688,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 16.8
+  },
+  {
+   "name": "L16_00544",
+   "tags": [
+    "people",
+    "indoor",
+    "hdr"
+   ],
+   "shot_id": "2ec109a8f355",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.4739,
+     "noise_mid": 0.4216,
+     "noise_bright": 0.3246,
+     "noise": 0.4018,
+     "detail": 0.4854,
+     "ghost_pct": 0.0,
+     "de00_med": 3.3039,
+     "de00_p90": 6.0045,
+     "dL": 0.2312,
+     "dC": -1.6912,
+     "clip_pct": 10.8718,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 2.0292,
+     "noise_mid": 1.6635,
+     "noise_bright": 1.0941,
+     "noise": 1.5457,
+     "detail": 0.472,
+     "de00_med": 3.5902,
+     "de00_p90": 6.4333,
+     "dL": -0.2392,
+     "dC": -1.5173,
+     "clip_pct": 10.7059,
+     "crush_pct": 0.0031
+    },
+    "lux": {
+     "noise_shadow": 0.9253,
+     "noise_mid": 0.8302,
+     "noise_bright": 0.6385,
+     "noise": 0.7886,
+     "detail": 0.573,
+     "ghost_pct": 25.129,
+     "de00_med": 2.5423,
+     "de00_p90": 9.1154,
+     "dL": 1.9287,
+     "dC": -0.2525,
+     "clip_pct": 24.1554,
+     "crush_pct": 0.0009
+    },
+    "camera": {
+     "noise_shadow": 1.5027,
+     "noise_mid": 1.5031,
+     "noise_bright": 1.0819,
+     "noise": 1.347,
+     "detail": 0.5916,
+     "ghost_pct": 0.058,
+     "clip_pct": 12.6116,
+     "crush_pct": 0.0962
+    }
+   },
+   "render_s": 9.8,
+   "process_s": 55.5,
+   "size": [
+    4160,
+    3120
+   ],
+   "lux_inliers": 2662,
+   "camera_inliers": 2891,
+   "valid_pct": 97.5,
+   "crops": [
+    {
+     "x": 576,
+     "y": 2496,
+     "kind": "detail"
+    },
+    {
+     "x": 1536,
+     "y": 2304,
+     "kind": "detail"
+    },
+    {
+     "x": 960,
+     "y": 2496,
+     "kind": "detail"
+    },
+    {
+     "x": 3648,
+     "y": 1344,
+     "kind": "flat dark"
+    },
+    {
+     "x": 3456,
+     "y": 1728,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 17.3
+  },
+  {
+   "name": "L16_00639",
+   "tags": [
+    "day",
+    "people",
+    "detail"
+   ],
+   "shot_id": "6577443e7177",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.299,
+     "noise_mid": 0.3685,
+     "noise_bright": 0.3792,
+     "noise": 0.347,
+     "detail": 0.3845,
+     "ghost_pct": 0.0,
+     "de00_med": 3.4933,
+     "de00_p90": 6.3381,
+     "dL": -0.6053,
+     "dC": 0.6033,
+     "clip_pct": 7.0111,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 1.6755,
+     "noise_mid": 1.5164,
+     "noise_bright": 1.2118,
+     "noise": 1.4548,
+     "detail": 0.3695,
+     "de00_med": 3.6674,
+     "de00_p90": 6.359,
+     "dL": -0.7219,
+     "dC": 0.8745,
+     "clip_pct": 6.882,
+     "crush_pct": 0.0019
+    },
+    "lux": {
+     "noise_shadow": 0.7345,
+     "noise_mid": 0.7404,
+     "noise_bright": 0.7813,
+     "noise": 0.7518,
+     "detail": 0.4182,
+     "ghost_pct": 14.2333,
+     "de00_med": 2.337,
+     "de00_p90": 5.4609,
+     "dL": 1.8871,
+     "dC": 0.0526,
+     "clip_pct": 12.9126,
+     "crush_pct": 0.0032
+    },
+    "camera": {
+     "noise_shadow": 0.9655,
+     "noise_mid": 1.2107,
+     "noise_bright": 1.1517,
+     "noise": 1.1042,
+     "detail": 0.4454,
+     "ghost_pct": 0.0,
+     "clip_pct": 10.8636,
+     "crush_pct": 0.2586
+    }
+   },
+   "render_s": 9.7,
+   "process_s": 57.6,
+   "size": [
+    3120,
+    4160
+   ],
+   "lux_inliers": 3330,
+   "camera_inliers": 3838,
+   "valid_pct": 98.3,
+   "crops": [
+    {
+     "x": 1920,
+     "y": 192,
+     "kind": "detail"
+    },
+    {
+     "x": 576,
+     "y": 0,
+     "kind": "detail"
+    },
+    {
+     "x": 1344,
+     "y": 0,
+     "kind": "detail"
+    },
+    {
+     "x": 192,
+     "y": 3264,
+     "kind": "flat dark"
+    },
+    {
+     "x": 1728,
+     "y": 3648,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 17.4
+  },
+  {
+   "name": "L16_00283",
+   "tags": [
+    "night",
+    "stacked"
+   ],
+   "shot_id": "d27dd4956871",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.5014,
+     "noise_mid": 0.5932,
+     "noise_bright": 0.3718,
+     "noise": 0.48,
+     "detail": 0.4054,
+     "ghost_pct": 0.0554,
+     "de00_med": 7.7213,
+     "de00_p90": 14.2067,
+     "dL": -3.5982,
+     "dC": -1.3211,
+     "clip_pct": 0.5756,
+     "crush_pct": 0.0127
+    },
+    "single": {
+     "noise_shadow": 2.3914,
+     "noise_mid": 1.7681,
+     "noise_bright": 1.1775,
+     "noise": 1.7075,
+     "detail": 0.3906,
+     "de00_med": 7.2139,
+     "de00_p90": 14.2068,
+     "dL": -3.5514,
+     "dC": -0.5185,
+     "clip_pct": 0.5869,
+     "crush_pct": 0.1511
+    },
+    "lux": {
+     "noise_shadow": 0.9468,
+     "noise_mid": 1.0526,
+     "noise_bright": 0.5399,
+     "noise": 0.8134,
+     "detail": 0.5079,
+     "ghost_pct": 18.303,
+     "de00_med": 1.7102,
+     "de00_p90": 4.5406,
+     "dL": -0.1841,
+     "dC": -0.6442,
+     "clip_pct": 0.9244,
+     "crush_pct": 0.8103
+    },
+    "camera": {
+     "noise_shadow": 1.882,
+     "noise_mid": 1.7435,
+     "noise_bright": 1.3088,
+     "noise": 1.6255,
+     "detail": 0.5036,
+     "ghost_pct": 1.9273,
+     "clip_pct": 0.5339,
+     "crush_pct": 0.8277
+    }
+   },
+   "render_s": 9.5,
+   "process_s": 71.5,
+   "size": [
+    4160,
+    3120
+   ],
+   "lux_inliers": 1789,
+   "camera_inliers": 2408,
+   "valid_pct": 97.8,
+   "crops": [
+    {
+     "x": 2688,
+     "y": 1728,
+     "kind": "detail"
+    },
+    {
+     "x": 1536,
+     "y": 1920,
+     "kind": "detail"
+    },
+    {
+     "x": 1920,
+     "y": 1920,
+     "kind": "detail"
+    },
+    {
+     "x": 2688,
+     "y": 1152,
+     "kind": "flat dark"
+    },
+    {
+     "x": 1728,
+     "y": 1536,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 17.5
+  },
+  {
+   "name": "L16_00261",
+   "tags": [
+    "night",
+    "stacked"
+   ],
+   "shot_id": "da13ec113682",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.4414,
+     "noise_mid": 0.4995,
+     "noise_bright": 0.3283,
+     "noise": 0.4168,
+     "detail": 0.4804,
+     "ghost_pct": 0.0247,
+     "de00_med": 8.5796,
+     "de00_p90": 12.7774,
+     "dL": -3.675,
+     "dC": 4.6616,
+     "clip_pct": 0.1165,
+     "crush_pct": 0.0809
+    },
+    "single": {
+     "noise_shadow": 2.1752,
+     "noise_mid": 1.6962,
+     "noise_bright": 1.103,
+     "noise": 1.5966,
+     "detail": 0.4831,
+     "de00_med": 9.465,
+     "de00_p90": 14.8624,
+     "dL": -3.5577,
+     "dC": 5.8413,
+     "clip_pct": 0.1189,
+     "crush_pct": 0.8991
+    },
+    "lux": {
+     "noise_shadow": 0.8572,
+     "noise_mid": 1.0179,
+     "noise_bright": 0.6338,
+     "noise": 0.8208,
+     "detail": 0.6518,
+     "ghost_pct": 27.3779,
+     "de00_med": 1.6335,
+     "de00_p90": 3.9198,
+     "dL": -0.4303,
+     "dC": -0.0897,
+     "clip_pct": 0.3094,
+     "crush_pct": 3.3873
+    },
+    "camera": {
+     "noise_shadow": 1.9251,
+     "noise_mid": 1.7186,
+     "noise_bright": 1.1368,
+     "noise": 1.5551,
+     "detail": 0.6081,
+     "ghost_pct": 4.482,
+     "clip_pct": 0.0994,
+     "crush_pct": 3.5702
+    }
+   },
+   "render_s": 9.8,
+   "process_s": 85.2,
+   "size": [
+    3120,
+    4160
+   ],
+   "lux_inliers": 2813,
+   "camera_inliers": 3145,
+   "valid_pct": 90.9,
+   "crops": [
+    {
+     "x": 1152,
+     "y": 3648,
+     "kind": "detail"
+    },
+    {
+     "x": 1536,
+     "y": 3648,
+     "kind": "detail"
+    },
+    {
+     "x": 1344,
+     "y": 3264,
+     "kind": "detail"
+    },
+    {
+     "x": 1728,
+     "y": 960,
+     "kind": "flat dark"
+    },
+    {
+     "x": 960,
+     "y": 768,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 17.4
+  },
+  {
+   "name": "L16_00436",
+   "tags": [
+    "night",
+    "stacked",
+    "indoor"
+   ],
+   "shot_id": "3c57867bddb6",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.4364,
+     "noise_mid": 0.4349,
+     "noise_bright": 0.3387,
+     "noise": 0.4006,
+     "detail": 0.3771,
+     "ghost_pct": 0.1063,
+     "de00_med": 7.8954,
+     "de00_p90": 12.0335,
+     "dL": -3.5549,
+     "dC": 2.6453,
+     "clip_pct": 0.0196,
+     "crush_pct": 0.3198
+    },
+    "single": {
+     "noise_shadow": 1.9647,
+     "noise_mid": 1.6321,
+     "noise_bright": 1.0441,
+     "noise": 1.496,
+     "detail": 0.4855,
+     "de00_med": 9.0071,
+     "de00_p90": 15.0989,
+     "dL": -3.4412,
+     "dC": 5.8455,
+     "clip_pct": 0.0183,
+     "crush_pct": 1.3338
+    },
+    "lux": {
+     "noise_shadow": 0.7584,
+     "noise_mid": 0.8294,
+     "noise_bright": 0.5191,
+     "noise": 0.6886,
+     "detail": 0.3881,
+     "ghost_pct": 11.6304,
+     "de00_med": 1.151,
+     "de00_p90": 2.4431,
+     "dL": -0.7138,
+     "dC": -0.2467,
+     "clip_pct": 0.0363,
+     "crush_pct": 5.5304
+    },
+    "camera": {
+     "noise_shadow": 1.8101,
+     "noise_mid": 1.5748,
+     "noise_bright": 0.844,
+     "noise": 1.34,
+     "detail": 0.4119,
+     "ghost_pct": 5.3779,
+     "clip_pct": 0.0229,
+     "crush_pct": 4.4762
+    }
+   },
+   "render_s": 9.6,
+   "process_s": 80.3,
+   "size": [
+    3528,
+    2646
+   ],
+   "lux_inliers": 193,
+   "camera_inliers": 257,
+   "valid_pct": 95.2,
+   "crops": [
+    {
+     "x": 1920,
+     "y": 960,
+     "kind": "detail"
+    },
+    {
+     "x": 1920,
+     "y": 576,
+     "kind": "detail"
+    },
+    {
+     "x": 1920,
+     "y": 192,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 15.4
+  },
+  {
+   "name": "L16_00617",
+   "tags": [
+    "night",
+    "indoor",
+    "hdr"
+   ],
+   "shot_id": "497b1ae18e57",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.4336,
+     "noise_mid": 0.4746,
+     "noise_bright": 0.257,
+     "noise": 0.3754,
+     "detail": 0.4926,
+     "ghost_pct": 0.0,
+     "de00_med": 3.4645,
+     "de00_p90": 5.7186,
+     "dL": -1.1176,
+     "dC": -0.4686,
+     "clip_pct": 2.817,
+     "crush_pct": 0.014
+    },
+    "single": {
+     "noise_shadow": 1.7066,
+     "noise_mid": 1.6056,
+     "noise_bright": 1.047,
+     "noise": 1.4209,
+     "detail": 0.4521,
+     "de00_med": 4.3521,
+     "de00_p90": 7.9837,
+     "dL": -1.291,
+     "dC": -0.2502,
+     "clip_pct": 2.8252,
+     "crush_pct": 0.6797
+    },
+    "lux": {
+     "noise_shadow": 0.3961,
+     "noise_mid": 0.5469,
+     "noise_bright": 0.3759,
+     "noise": 0.4334,
+     "detail": 0.5829,
+     "ghost_pct": 1.7885,
+     "de00_med": 5.4944,
+     "de00_p90": 7.1814,
+     "dL": -6.1831,
+     "dC": -3.3563,
+     "clip_pct": 2.987,
+     "crush_pct": 18.1576
+    },
+    "camera": {
+     "noise_shadow": 1.0142,
+     "noise_mid": 0.8625,
+     "noise_bright": 0.7232,
+     "noise": 0.8585,
+     "detail": 0.6282,
+     "ghost_pct": 0.4563,
+     "clip_pct": 2.6097,
+     "crush_pct": 8.1491
+    }
+   },
+   "render_s": 9.8,
+   "process_s": 67.1,
+   "size": [
+    3328,
+    2496
+   ],
+   "lux_inliers": 773,
+   "camera_inliers": 766,
+   "valid_pct": 86.8,
+   "crops": [
+    {
+     "x": 1728,
+     "y": 1152,
+     "kind": "detail"
+    },
+    {
+     "x": 1152,
+     "y": 960,
+     "kind": "detail"
+    },
+    {
+     "x": 1536,
+     "y": 576,
+     "kind": "detail"
+    },
+    {
+     "x": 2112,
+     "y": 384,
+     "kind": "flat dark"
+    }
+   ],
+   "bench_s": 14.8
+  },
+  {
+   "name": "L16_00169",
+   "tags": [
+    "night",
+    "indoor"
+   ],
+   "shot_id": "264258e17ac5",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.4238,
+     "noise_mid": 0.7655,
+     "noise_bright": 0.558,
+     "noise": 0.5657,
+     "detail": 0.5662,
+     "ghost_pct": 0.0,
+     "clip_pct": 0.0011,
+     "crush_pct": 0.0231
+    },
+    "single": {
+     "noise_shadow": 1.9392,
+     "noise_mid": 1.7645,
+     "noise_bright": 1.1488,
+     "noise": 1.5782,
+     "detail": 0.5215,
+     "clip_pct": 0.0016,
+     "crush_pct": 0.269
+    },
+    "lux": {
+     "noise_shadow": 0.518,
+     "noise_mid": 0.4481,
+     "noise_bright": 0.4757,
+     "noise": 0.4798,
+     "detail": 0.6216,
+     "ghost_pct": 2.7982,
+     "clip_pct": 14.4659,
+     "crush_pct": 1.2127
+    }
+   },
+   "render_s": 10.1,
+   "process_s": 65.9,
+   "size": [
+    3328,
+    2496
+   ],
+   "lux_inliers": 896,
+   "valid_pct": 95.4,
+   "crops": [
+    {
+     "x": 1152,
+     "y": 1152,
+     "kind": "detail"
+    },
+    {
+     "x": 1536,
+     "y": 1152,
+     "kind": "detail"
+    },
+    {
+     "x": 1920,
+     "y": 1344,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 13.7
+  },
+  {
+   "name": "L16_00272",
+   "tags": [
+    "tele70",
+    "detail"
+   ],
+   "shot_id": "95c7dff5972c",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.2236,
+     "noise_mid": 0.2759,
+     "noise_bright": 0.2401,
+     "noise": 0.2456,
+     "detail": 0.5583,
+     "ghost_pct": 0.0,
+     "de00_med": 2.5918,
+     "de00_p90": 4.349,
+     "dL": 0.8117,
+     "dC": 0.1901,
+     "clip_pct": 8.4844,
+     "crush_pct": 0.002
+    },
+    "single": {
+     "noise_shadow": 1.3626,
+     "noise_mid": 1.4036,
+     "noise_bright": 0.6387,
+     "noise": 1.069,
+     "detail": 0.5526,
+     "de00_med": 2.8554,
+     "de00_p90": 5.1556,
+     "dL": 0.6765,
+     "dC": 0.4534,
+     "clip_pct": 8.5398,
+     "crush_pct": 0.0536
+    },
+    "lux": {
+     "noise_shadow": 0.7365,
+     "noise_mid": 0.681,
+     "noise_bright": 0.9151,
+     "noise": 0.7713,
+     "detail": 0.7173,
+     "ghost_pct": 1.4042,
+     "de00_med": 3.0877,
+     "de00_p90": 4.441,
+     "dL": 3.8967,
+     "dC": 0.1452,
+     "clip_pct": 10.9421,
+     "crush_pct": 0.0031
+    },
+    "camera": {
+     "noise_shadow": 0.6085,
+     "noise_mid": 0.605,
+     "noise_bright": 0.5784,
+     "noise": 0.5971,
+     "detail": 0.6611,
+     "ghost_pct": 2.961,
+     "clip_pct": 9.1493,
+     "crush_pct": 0.2844
+    }
+   },
+   "render_s": 9.4,
+   "process_s": 74.0,
+   "size": [
+    3098,
+    2323
+   ],
+   "lux_inliers": 2439,
+   "camera_inliers": 2848,
+   "valid_pct": 97.7,
+   "crops": [
+    {
+     "x": 1152,
+     "y": 960,
+     "kind": "detail"
+    },
+    {
+     "x": 1536,
+     "y": 960,
+     "kind": "detail"
+    },
+    {
+     "x": 1920,
+     "y": 1728,
+     "kind": "detail"
+    },
+    {
+     "x": 192,
+     "y": 1536,
+     "kind": "flat dark"
+    },
+    {
+     "x": 1728,
+     "y": 384,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 14.1
+  },
+  {
+   "name": "L16_00676",
+   "tags": [
+    "tele70",
+    "detail"
+   ],
+   "shot_id": "23d1f228ae8c",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.3892,
+     "noise_mid": 0.4333,
+     "noise_bright": 1.1073,
+     "noise": 0.5716,
+     "detail": 0.5653,
+     "ghost_pct": 0.0,
+     "de00_med": 3.9624,
+     "de00_p90": 5.6949,
+     "dL": -1.5578,
+     "dC": 4.1763,
+     "clip_pct": 0.1853,
+     "crush_pct": 0.0057
+    },
+    "single": {
+     "noise_shadow": 1.7407,
+     "noise_mid": 1.5558,
+     "noise_bright": 1.5809,
+     "noise": 1.6238,
+     "detail": 0.5189,
+     "de00_med": 3.9209,
+     "de00_p90": 5.7949,
+     "dL": -1.6206,
+     "dC": 4.2183,
+     "clip_pct": 0.1939,
+     "crush_pct": 0.0093
+    },
+    "lux": {
+     "noise_shadow": 0.857,
+     "noise_mid": 0.9255,
+     "noise_bright": 2.3703,
+     "noise": 1.2342,
+     "detail": 0.6848,
+     "ghost_pct": 1.6858,
+     "de00_med": 2.6331,
+     "de00_p90": 7.9271,
+     "dL": 3.9321,
+     "dC": 1.2031,
+     "clip_pct": 5.0022,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 0.7839,
+     "noise_mid": 1.035,
+     "noise_bright": 2.6025,
+     "noise": 1.2829,
+     "detail": 0.6179,
+     "ghost_pct": 1.5007,
+     "clip_pct": 4.9052,
+     "crush_pct": 0.0001
+    }
+   },
+   "render_s": 9.1,
+   "process_s": 77.3,
+   "size": [
+    4160,
+    3120
+   ],
+   "lux_inliers": 3512,
+   "camera_inliers": 3244,
+   "valid_pct": 98.0,
+   "crops": [
+    {
+     "x": 960,
+     "y": 384,
+     "kind": "detail"
+    },
+    {
+     "x": 384,
+     "y": 384,
+     "kind": "detail"
+    },
+    {
+     "x": 1344,
+     "y": 384,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 15.8
+  },
+  {
+   "name": "L16_00204",
+   "tags": [
+    "tele150",
+    "detail"
+   ],
+   "shot_id": "c50c666ee9f2",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.5402,
+     "noise_mid": 0.6201,
+     "noise_bright": 0.039,
+     "noise": 0.2354,
+     "detail": 0.6751,
+     "ghost_pct": 0.0,
+     "de00_med": 4.0449,
+     "de00_p90": 6.2286,
+     "dL": -1.7233,
+     "dC": 2.5085,
+     "clip_pct": 0.0025,
+     "crush_pct": 0.0
+    },
+    "single": {
+     "noise_shadow": 1.877,
+     "noise_mid": 1.704,
+     "noise_bright": 0.4365,
+     "noise": 1.1177,
+     "detail": 0.6217,
+     "de00_med": 4.0968,
+     "de00_p90": 7.0203,
+     "dL": -1.7456,
+     "dC": 2.8886,
+     "clip_pct": 0.0012,
+     "crush_pct": 0.0161
+    },
+    "lux": {
+     "noise_shadow": 0.7968,
+     "noise_mid": 1.1305,
+     "noise_bright": 0.2384,
+     "noise": 0.5988,
+     "detail": 0.8068,
+     "ghost_pct": 2.6039,
+     "de00_med": 5.8601,
+     "de00_p90": 7.4122,
+     "dL": 5.6689,
+     "dC": 1.6986,
+     "clip_pct": 15.3446,
+     "crush_pct": 0.0
+    },
+    "camera": {
+     "noise_shadow": 0.9842,
+     "noise_mid": 1.4362,
+     "noise_bright": 0.1637,
+     "noise": 0.614,
+     "detail": 0.7169,
+     "ghost_pct": 3.1976,
+     "clip_pct": 21.0485,
+     "crush_pct": 0.0051
+    }
+   },
+   "render_s": 9.4,
+   "process_s": 69.7,
+   "size": [
+    2554,
+    1915
+   ],
+   "lux_inliers": 2406,
+   "camera_inliers": 3102,
+   "valid_pct": 97.3,
+   "crops": [
+    {
+     "x": 960,
+     "y": 384,
+     "kind": "detail"
+    },
+    {
+     "x": 1344,
+     "y": 384,
+     "kind": "detail"
+    },
+    {
+     "x": 384,
+     "y": 768,
+     "kind": "detail"
+    },
+    {
+     "x": 1920,
+     "y": 768,
+     "kind": "flat dark"
+    },
+    {
+     "x": 2112,
+     "y": 192,
+     "kind": "flat bright"
+    }
+   ],
+   "bench_s": 13.1
+  },
+  {
+   "name": "L16_00276",
+   "tags": [
+    "tele150",
+    "dusk"
+   ],
+   "shot_id": "cf271e921d25",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 1.2088,
+     "noise_mid": 0.6928,
+     "noise_bright": 0.5393,
+     "noise": 0.7672,
+     "detail": 0.577,
+     "ghost_pct": 0.0,
+     "de00_med": 2.5358,
+     "de00_p90": 4.1201,
+     "dL": -0.2651,
+     "dC": -3.5632,
+     "clip_pct": 0.2405,
+     "crush_pct": 0.0003
+    },
+    "single": {
+     "noise_shadow": 3.1168,
+     "noise_mid": 2.3574,
+     "noise_bright": 1.9626,
+     "noise": 2.434,
+     "detail": 0.5695,
+     "de00_med": 3.0885,
+     "de00_p90": 6.427,
+     "dL": -0.3553,
+     "dC": -3.6159,
+     "clip_pct": 0.2549,
+     "crush_pct": 0.0245
+    },
+    "lux": {
+     "noise_shadow": 1.2137,
+     "noise_mid": 0.8149,
+     "noise_bright": 0.676,
+     "noise": 0.8744,
+     "detail": 0.6339,
+     "ghost_pct": 8.8188,
+     "de00_med": 1.9907,
+     "de00_p90": 5.5888,
+     "dL": 3.1546,
+     "dC": 0.3791,
+     "clip_pct": 0.514,
+     "crush_pct": 0.0001
+    },
+    "camera": {
+     "noise_shadow": 1.6134,
+     "noise_mid": 1.0885,
+     "noise_bright": 0.9333,
+     "noise": 1.179,
+     "detail": 0.618,
+     "ghost_pct": 4.6447,
+     "clip_pct": 0.3355,
+     "crush_pct": 0.0696
+    }
+   },
+   "render_s": 8.7,
+   "process_s": 85.3,
+   "size": [
+    1954,
+    1465
+   ],
+   "lux_inliers": 1416,
+   "camera_inliers": 1802,
+   "valid_pct": 97.9,
+   "crops": [
+    {
+     "x": 1344,
+     "y": 960,
+     "kind": "detail"
+    },
+    {
+     "x": 960,
+     "y": 960,
+     "kind": "detail"
+    },
+    {
+     "x": 768,
+     "y": 576,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 11.2
+  },
+  {
+   "name": "L16_00284",
+   "tags": [
+    "tele150",
+    "night",
+    "stacked"
+   ],
+   "shot_id": "7dc0d4534142",
+   "renderers": {
+    "ours": {
+     "noise_shadow": 0.7595,
+     "noise_mid": 0.6401,
+     "noise_bright": 0.1915,
+     "noise": 0.4532,
+     "detail": 0.5392,
+     "ghost_pct": 0.0,
+     "clip_pct": 0.3951,
+     "crush_pct": 0.0086
+    },
+    "single": {
+     "noise_shadow": 2.8756,
+     "noise_mid": 2.4007,
+     "noise_bright": 0.4889,
+     "noise": 1.5,
+     "detail": 0.1633,
+     "clip_pct": 0.394,
+     "crush_pct": 0.2567
+    }
+   },
+   "render_s": 9.9,
+   "process_s": 96.6,
+   "size": [
+    1465,
+    1954
+   ],
+   "errors": [
+    "lux: registration failed",
+    "camera: registration failed"
+   ],
+   "valid_pct": 100.0,
+   "crops": [
+    {
+     "x": 384,
+     "y": 768,
+     "kind": "detail"
+    },
+    {
+     "x": 768,
+     "y": 768,
+     "kind": "detail"
+    },
+    {
+     "x": 960,
+     "y": 1536,
+     "kind": "detail"
+    }
+   ],
+   "bench_s": 11.4
+  }
+ ]
+}

@@ -1,0 +1,28 @@
+{
+  "about": "Pevná testovací sada benchmarku (vybráno 2026-10-28). Neměnit bez důvodu – výsledky verzí se pak nedají srovnat.",
+  "shots": [
+    {"name": "L16_00750", "tags": ["day", "detail"], "note": "dům, kamenná zeď, dlažba"},
+    {"name": "L16_00406", "tags": ["day", "detail"], "note": "krajina, cesta, vzdálené kopce"},
+    {"name": "L16_00740", "tags": ["day", "detail", "people"], "note": "strom, plot, květiny"},
+    {"name": "L16_00641", "tags": ["day", "detail", "color"], "note": "obraz zblízka"},
+    {"name": "L16_00648", "tags": ["day", "color"], "note": "galerie, bílé stěny, socha"},
+    {"name": "L16_00365", "tags": ["day", "macro", "detail"], "note": "houby zblízka (~0,3 m), duchové ve fúzi – nahlásil uživatel 2026-10-28"},
+    {"name": "L16_00619", "tags": ["hdr"], "note": "okno v bílé místnosti"},
+    {"name": "L16_00748", "tags": ["hdr", "detail"], "note": "dům proti nebi"},
+    {"name": "L16_00739", "tags": ["hdr", "detail"], "note": "vila, obloha"},
+    {"name": "L16_00542", "tags": ["hdr", "people", "indoor"], "note": "restaurace proti oknům"},
+    {"name": "L16_00754", "tags": ["day", "people", "depth"], "note": "žena u zábradlí (refocus, vlasy)"},
+    {"name": "L16_00544", "tags": ["people", "indoor", "hdr"], "note": "portrét u okna"},
+    {"name": "L16_00639", "tags": ["day", "people", "detail"], "note": "pruhy (moaré), brýle"},
+    {"name": "L16_00283", "tags": ["night", "stacked"], "note": "ulice v noci, lampy, měsíc"},
+    {"name": "L16_00261", "tags": ["night", "stacked"], "note": "úzká ulice v noci"},
+    {"name": "L16_00436", "tags": ["night", "stacked", "indoor"], "note": "tmavý pokoj, obrazy"},
+    {"name": "L16_00617", "tags": ["night", "indoor", "hdr"], "note": "podkroví, lampa"},
+    {"name": "L16_00169", "tags": ["night", "indoor"], "note": "tmavý interiér s oknem (bez JPEG z foťáku)"},
+    {"name": "L16_00272", "tags": ["tele70", "detail"], "note": "tramvaj, fasády"},
+    {"name": "L16_00676", "tags": ["tele70", "detail"], "note": "páv, stromy (zdvojené kmeny)"},
+    {"name": "L16_00204", "tags": ["tele150", "detail"], "note": "strom, plot, borovice"},
+    {"name": "L16_00276", "tags": ["tele150", "dusk"], "note": "ulice za soumraku"},
+    {"name": "L16_00284", "tags": ["tele150", "night", "stacked"], "note": "noc, lampy, měsíc"}
+  ]
+}
