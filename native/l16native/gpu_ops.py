@@ -256,13 +256,17 @@ def fuse(
         inside = warped[0] >= 0
         sat = _sample(_t(src.clip_map()), mx, my, "bilinear", 0.0)[0] >= cpu_fusion.SATURATION
         x = warped * gain
+        bad, mismatch = cpu_fusion.structure_mismatch(
+            ref_l, _np((x * LUMA).sum(0, keepdim=True)), inside.cpu().numpy(), lum_scale
+        )
+        inside &= ~_t(bad.astype(np.float32))[0].bool()
         x_blur = _gauss((x * LUMA).sum(0, keepdim=True), 2.0)[0]
         sigma = torch.sqrt(0.002 * ref_blur.clamp_min(0) + 1e-5) * ghost_sigma
         agree = torch.exp(-(((x_blur - ref_blur) / sigma) ** 2))
         wgt = agree * (1.0 / gain) * inside * ~sat
         acc += wgt[None] * torch.where(inside[None], x, torch.zeros_like(x))
         wsum += wgt
-        if method == "wiener":
+        if method == "wiener" and mismatch <= cpu_fusion.MISMATCH_REJECT:
             aligned.append(
                 merge_mod.Aligned(
                     _np(x),
@@ -275,6 +279,7 @@ def fuse(
             "gain": round(gain, 3),
             "used_pct": round(float((wgt > 0.5 / gain).float().mean()) * 100, 1),
             "residual_flow_px": round(flow_px, 2),
+            "mismatch_pct": round(100 * mismatch, 1),
         }
         del S, warped, x, mx, my
     fused_t = torch.where(wsum[None] > 1e-6, acc / wsum.clamp_min(1e-6)[None], R)

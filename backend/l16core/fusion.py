@@ -23,6 +23,13 @@ log = structlog.get_logger()
 F32 = NDArray[np.float32]
 LUMA = np.array([0.2126, 0.7152, 0.0722], np.float32)
 SATURATION = 0.92  # podíl saturace senzoru (develop.clip), nad nímž je pixel přepálený
+# kontrola struktury zarovnaného modulu (structure_mismatch): okno ≈ 52 px, ve ¼ rozlišení
+MISMATCH_SCALE = 4
+MISMATCH_RADIUS = 6
+MISMATCH_NCC = 0.5  # pod tím okno nesedí (duch, chybná hloubka/kalibrace)
+MISMATCH_TEXTURE = 0.02  # σ gama jasu (0..1), pod tím je plocha hladká a NCC nic neříká
+MISMATCH_NOISE = 3.0  # a zároveň σ > 3× šum reference (v noci by jinak NCC srážel šum)
+MISMATCH_REJECT = 0.5  # nesedí-li víc textury, modul se vyřadí celý
 
 
 @dataclass(slots=True)
@@ -94,6 +101,52 @@ def _gamma_luma(rgb: F32, scale: float) -> NDArray[np.uint8]:
     y = np.clip((rgb @ LUMA) / scale, 0, 1) ** (1 / 2.2)
     out: NDArray[np.uint8] = (y * 255).astype(np.uint8)
     return out
+
+
+def structure_mismatch(
+    ref_luma: F32, x_luma: F32, inside: NDArray[np.bool_], scale: float
+) -> tuple[NDArray[np.bool_], float]:
+    """Kde zarovnaný modul nesedí strukturou na referenci → (maska, podíl nesedící textury).
+
+    Lokální NCC gama jasu v oknech ~52 px. Wiener merge odhaduje šum z rozdílů modulů, takže
+    když je zarovnání chybné všude (makro 00365: kalibrace mimo rozsah zaostření), naměří
+    „šum“ obrovský a duchy zprůměruje; tahle kontrola na šumu nezávisí. Podíl > MISMATCH_REJECT
+    vyřadí modul celý (maska = vše).
+    """
+    h, w = ref_luma.shape
+    sz = (max(1, w // MISMATCH_SCALE), max(1, h // MISMATCH_SCALE))
+
+    def prep(y: F32) -> F32:
+        g = np.clip(y / scale, 0, 1) ** (1 / 2.2)
+        return np.asarray(
+            cv2.resize(g.astype(np.float32), sz, interpolation=cv2.INTER_AREA), np.float32
+        )
+
+    a, b = prep(ref_luma), prep(np.where(inside, x_luma, ref_luma))
+    # jen kresba: plynulé přechody (vinětace, okraj zakrytí zrcátkem) by NCC v okně přebily
+    a = a - np.asarray(cv2.GaussianBlur(a, (0, 0), MISMATCH_RADIUS / 2), np.float32)
+    b = b - np.asarray(cv2.GaussianBlur(b, (0, 0), MISMATCH_RADIUS / 2), np.float32)
+    k = (2 * MISMATCH_RADIUS + 1,) * 2
+    ma, mb = cv2.blur(a, k), cv2.blur(b, k)
+    va = np.maximum(cv2.blur(a * a, k) - ma * ma, 0)
+    vb = np.maximum(cv2.blur(b * b, k) - mb * mb, 0)
+    ncc = (cv2.blur(a * b, k) - ma * mb) / np.sqrt(va * vb + 1e-8)
+    ins = cv2.resize(inside.astype(np.uint8), sz, interpolation=cv2.INTER_NEAREST) > 0
+    # šum ve ¼ rozlišení (gama ≈ odmocnina stabilizuje výstřelový šum → jedna hodnota stačí)
+    hp = a - cv2.GaussianBlur(a, (0, 0), 1.0)  # a už je horní propust, tohle je jen šum
+    noise = 1.4826 * float(np.median(np.abs(hp[ins] - np.median(hp[ins])))) if ins.any() else 0.0
+    gate = max(MISMATCH_TEXTURE, MISMATCH_NOISE * noise)
+    textured = ins & (np.sqrt(va) > gate)
+    bad = textured & (ncc < MISMATCH_NCC)
+    # modul bez kresby tam, kde ji reference má = zakrytí (zrcátko tele modulů, 00204 B3) nebo
+    # rozostření: maskuje se lokálně, ale o vyřazení celého modulu rozhoduje jen část s kresbou
+    covered = textured & (np.sqrt(vb) > 0.5 * gate)
+    frac = float((bad & covered).sum() / max(int(covered.sum()), 1))
+    if frac > MISMATCH_REJECT:
+        return np.ones((h, w), np.bool_), frac
+    grown = cv2.dilate(bad.astype(np.uint8), np.ones((3, 3), np.uint8))
+    full = cv2.resize(grown, (w, h), interpolation=cv2.INTER_NEAREST)
+    return np.asarray(full, np.uint8) > 0, frac
 
 
 def _residual_flow(ref_g: NDArray[np.uint8], img_g: NDArray[np.uint8], max_px: float = 8.0) -> F32:
@@ -282,6 +335,10 @@ def fuse(
             np.asarray(cv2.remap(src_clip, mapx, mapy, cv2.INTER_LINEAR), np.float32) >= SATURATION
         )
         x = warped * gain
+        bad, mismatch = structure_mismatch(
+            ref_luma, (x @ LUMA).astype(np.float32), inside, lum_scale
+        )
+        inside &= ~bad
         # duchy: porovnání rozmazaného jasu s referencí, tolerance podle šumu
         x_blur = np.asarray(cv2.GaussianBlur(x @ LUMA, (0, 0), 2.0), np.float32)
         sigma = np.sqrt(0.002 * np.maximum(ref_blur, 0) + 1e-5) * ghost_sigma
@@ -290,13 +347,14 @@ def fuse(
         wgt = (agree * (1.0 / gain) * inside * ~sat).astype(np.float32)
         acc += wgt[..., None] * np.where(inside[..., None], x, 0)
         wsum += wgt
-        if method == "wiener":
+        if method == "wiener" and mismatch <= MISMATCH_REJECT:
             # relativní rozptyl ve škále reference ≈ gain (výstřelový šum); model šumu se změří
             aligned.append(merge_mod.Aligned(x, inside & ~sat, gain, src.geo.camera))
         per_module[src.geo.camera] = {
             "gain": round(gain, 3),
             "used_pct": round(float((wgt > 0.5 / gain).mean()) * 100, 1),
             "residual_flow_px": round(flow_px, 2),
+            "mismatch_pct": round(100 * mismatch, 1),
         }
 
     fused = np.where(

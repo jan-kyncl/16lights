@@ -39,6 +39,16 @@ All in the reference's raw sensor orientation, full resolution, linear camera RG
      the test was `max(rgb) ≥ 0.92`, which rejected bright but unclipped pixels lifted by the
      vignetting gain: 10–34 % of A3–A5 on daylight shots, so bright areas came from A1 alone.
      The same clip map is used for mono A2 and for the B modules of the 52 MP build.
+   - **structure check** (`structure_mismatch`, 2026-10-28): local NCC of the high-passed gamma
+     luma in ~52 px windows (¼ res). Where the module has texture but does not match the reference
+     (NCC < 0.5), the pixels are masked out; areas where the module has no texture at all (mirror
+     occlusion, defocus, a finger) are masked too but do not count. If more than half of the
+     module's textured windows mismatch, the module is dropped. The texture gate is
+     `max(0.02, 3 × noise)`, otherwise night noise fakes mismatches. Needed because the Wiener
+     merge measures its noise model from the module differences: when the alignment is wrong
+     everywhere (macro 00365, depth refine beyond the near plane) the "noise" is huge and the merge
+     averaged the ghosts in. Found real problems: 00204 B3 shifted ~20 px, 00283 A5 occluded on
+     the left, 00436 A5 blurred
 6. Weighted mean, in the reference's scale. Mono A2 is not used yet.
 
 ## Merge and denoise (`l16core/merge.py`, GPU `native/l16native/gpu_merge.py`, 2026-10-22)
