@@ -22,6 +22,7 @@ from app import jobs
 from app.config import get_settings
 from l16core import __version__, calibration, export, lelr, native, shot
 from l16core.develop import downscale
+from l16core.fusion import MISMATCH_REJECT
 from l16core.logs import setup_logging
 from l16core.tone import ColorParams, Edits, apply_tone, load_look, to_uint8
 
@@ -356,6 +357,43 @@ def get_module_preview(shot_id: str, cam: str, request: Request) -> Response:
 @app.get("/api/shots/{shot_id}/thumb")
 def get_thumb(shot_id: str, request: Request) -> Response:
     return cached_file(request, processed_dir(shot_id) / "thumb.jpg", "image/jpeg")
+
+
+@app.get("/api/review")
+def review_list() -> list[dict[str, Any]]:
+    """Přehled výsledků fúze celé knihovny (kolik modulů prošlo kontrolou struktury)."""
+    out = []
+    for d in settings.shots.iterdir():
+        if not (d / "meta.json").exists():
+            continue
+        meta = shot.load_meta(d)
+        upload = json.loads((d / "upload.json").read_text()) if (d / "upload.json").exists() else {}
+        fus = meta.get("fusion") or {}
+        per = fus.get("per_module") or {}
+        mismatch = {k: v.get("mismatch_pct") for k, v in per.items()}
+        rejected = [k for k, v in mismatch.items() if v is not None and v > 100 * MISMATCH_REJECT]
+        out.append(
+            {
+                "shot_id": d.name,
+                "filename": upload.get("filename"),
+                "captured_at": meta["info"].get("captured_at"),
+                "focal_length_mm": meta["info"].get("focal_length_mm"),
+                "has_fused": (d / "preview_fused.f16").exists(),
+                "modules": fus.get("modules") or [],
+                "candidates": len(per),
+                "rejected": rejected,
+                "mismatch": mismatch,
+                "depth_m": (meta.get("depth") or {}).get("median_m"),
+                "warnings": meta.get("warnings", []),
+            }
+        )
+    return sorted(out, key=lambda i: i.get("captured_at") or "", reverse=True)
+
+
+@app.get("/api/shots/{shot_id}/review")
+def get_review(shot_id: str, request: Request, source: str = "fused") -> Response:
+    p = export.render_review(processed_dir(shot_id), source)
+    return cached_file(request, p, "image/jpeg")
 
 
 @app.get("/api/shots/{shot_id}/depth")

@@ -158,6 +158,7 @@ export async function renderLibrary(root: HTMLElement): Promise<void> {
       },
       t().uploadLightcal,
     ),
+    h("a", { class: "button", href: "#/review" }, t().reviewLink),
     h("a", { class: "button", href: "#/ingest" }, t().ingestLink),
     h("a", { class: "button", href: "#/knowhow" }, "Know-how"),
     langSwitch(),

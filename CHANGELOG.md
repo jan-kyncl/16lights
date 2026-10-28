@@ -18,6 +18,11 @@ processed it (`meta.json` → `version`), shown in the editor's info panel.
   or blurred modules.
 - **Benchmark** (`tools/bench/`): fixed set of 23 shots against lux and the camera JPEG; noise,
   detail, ghosts, ΔE00, HTML report with 1:1 crops, results per version in `tools/bench/results/`.
+- **Fusion review page** (`#/review`, library → Review): previews of the whole library with saved
+  edits, filter by dropped modules, fusion ↔ reference module switch, per-module mismatch, full-screen
+  viewer (←/→, space, Esc). Previews are cached per shot (`review_<fused|single>.jpg`). After the
+  library reprocess 53 of 550 shots had all modules dropped – mostly close focus (median 0.87 m),
+  where the calibration no longer fits.
 
 ## 0.4.0 – 2026-10-26
 

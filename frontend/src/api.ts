@@ -158,6 +158,21 @@ export interface ShotSummary {
   warnings?: number;
 }
 
+/** Výsledek fúze snímku pro stránku Přehled (GET /api/review). */
+export interface ReviewItem {
+  shot_id: string;
+  filename: string | null;
+  captured_at: string | null;
+  focal_length_mm: number | null;
+  has_fused: boolean;
+  modules: string[];
+  candidates: number;
+  rejected: string[];
+  mismatch: Record<string, number | null>;
+  depth_m: number | null;
+  warnings: unknown[];
+}
+
 export interface Job {
   id: string;
   status: "queued" | "running" | "done" | "failed";
@@ -209,6 +224,9 @@ export const api = {
   edits: (id: string) => fetch(`${BASE}/shots/${id}/edits`).then((r) => json<Edits>(r)),
   job: (id: string) => fetch(`${BASE}/jobs/${id}`).then((r) => json<Job>(r)),
   thumbUrl: (id: string) => `${BASE}/shots/${id}/thumb`,
+  review: () => fetch(`${BASE}/review`).then((r) => json<ReviewItem[]>(r)),
+  reviewUrl: (id: string, source: "fused" | "single") =>
+    `${BASE}/shots/${id}/review?source=${source}`,
   camera: (refresh = false) =>
     fetch(`${BASE}/camera${refresh ? "?refresh=true" : ""}`).then((r) => json<CameraListing>(r)),
   cameraThumbUrl: (handle: number) => `${BASE}/camera/thumb/${handle}`,

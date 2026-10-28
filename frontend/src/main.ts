@@ -6,6 +6,7 @@ import { renderIngest } from "./ingestPage";
 import { renderKnowhow } from "./knowhow";
 import { renderLibrary } from "./library";
 import { renderModules } from "./modulesPage";
+import { renderReview } from "./reviewPage";
 
 const root = document.getElementById("app") as HTMLElement;
 
@@ -19,6 +20,7 @@ async function route(): Promise<void> {
     else if (m?.[1]) await renderEditor(root, m[1]);
     else if (kh) renderKnowhow(root, kh[1]);
     else if (location.hash === "#/ingest") await renderIngest(root);
+    else if (location.hash === "#/review") await renderReview(root);
     else await renderLibrary(root);
   } catch (e) {
     root.replaceChildren(

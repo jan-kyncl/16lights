@@ -115,6 +115,35 @@ def render(
 D50 = 23  # EXIF LightSource / DNG CalibrationIlluminant
 
 
+def render_review(shot_dir: Path, source: str) -> Path:
+    """JPEG náhledu (rozměr preview) s uloženými úpravami pro stránku Přehled, cache na disku.
+
+    Bez doostření a refocusu (jde o hromadnou kontrolu fúze, ne o export); přepočítá se, když
+    je náhled nebo edits.json novější.
+    """
+    src = shot.base_paths(shot_dir, source)[0]
+    name = "fused" if src.name == "preview_fused.f16" else "single"
+    dst = shot_dir / f"review_{name}.jpg"
+    edits_p = shot_dir / "edits.json"
+    newest = max(src.stat().st_mtime, edits_p.stat().st_mtime if edits_p.exists() else 0.0)
+    if dst.exists() and dst.stat().st_mtime >= newest:
+        return dst
+    meta = shot.load_meta(shot_dir)
+    w, h = meta["preview"]["width"], meta["preview"]["height"]
+    rgb = np.fromfile(src, dtype="<f2").reshape(h, w, 3).astype(np.float32)
+    color = ColorParams.from_dict(meta["color"])
+    edits = shot.load_edits(shot_dir)
+    if edits.dynamic_range > 0:
+        base = shot.load_base(shot_dir, source).astype(np.float32)
+        rgb = rgb * base_gain(base, edits.dynamic_range, float(np.mean(base)))[..., None]
+        edits = replace(edits, dynamic_range=0.0)
+    srgb = apply_flip(apply_tone(rgb, color, edits), edits)
+    tmp = dst.with_suffix(".tmp")
+    Image.fromarray(to_uint8(srgb)).save(tmp, "JPEG", quality=85)
+    tmp.replace(dst)
+    return dst
+
+
 def _srational(m: np.ndarray, den: int = 1_000_000) -> list[int]:
     out: list[int] = []
     for v in np.asarray(m, dtype=np.float64).reshape(-1):

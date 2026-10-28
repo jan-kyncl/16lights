@@ -228,6 +228,30 @@ const en = {
   ingestNew: "new",
   ingestBackedUp: "backed up",
   ingestDone: (n: number) => `Imported ${n} shot(s); processing runs in the library.`,
+
+  // přehled fúze
+  reviewLink: "Review",
+  reviewTitle: "Fusion review",
+  reviewNote:
+    "Fused previews of the whole library with saved edits (no sharpening). Click a shot for a large view: ←/→ next, space switches fusion ↔ reference module only, Esc closes. Percentages = share of texture where a module does not match the reference (over 50 % → module dropped ✕).",
+  reviewCount: (n: number, all: number) => `${n} / ${all}`,
+  reviewFilter: "Filter",
+  reviewAll: "All shots",
+  reviewSingle: (n: number) => `All modules dropped (${n})`,
+  reviewPartial: (n: number) => `Some modules dropped (${n})`,
+  reviewClean: (n: number) => `No module dropped (${n})`,
+  reviewSource: "Image",
+  reviewSourceFused: "Fusion",
+  reviewSourceSingle: "Reference module",
+  reviewSize: "Preview size",
+  reviewModules: (n: number, all: number) => `${n}/${all} modules`,
+  reviewModulesHint: "Modules used in the fusion (incl. reference) / available",
+  reviewNoFusion: "no fusion",
+  reviewMismatchHint: "Structure mismatch per module",
+  reviewShowSingle: "Show reference module",
+  reviewShowFused: "Show fusion",
+  reviewOpenEditor: "Open in editor",
+  reviewEmpty: "No shots match the filter.",
 };
 
 type Dict = { [K in keyof typeof en]: (typeof en)[K] };
@@ -444,6 +468,29 @@ const cs: Dict = {
   ingestNew: "nový",
   ingestBackedUp: "zálohováno",
   ingestDone: (n) => `Importováno snímků: ${n}. Zpracování běží v knihovně.`,
+
+  reviewLink: "Přehled",
+  reviewTitle: "Přehled fúze",
+  reviewNote:
+    "Náhledy výsledku fúze celé knihovny s uloženými úpravami (bez doostření). Klik na snímek otevře velký náhled: ←/→ další, mezerník přepne fúze ↔ jen referenční modul, Esc zavře. Procenta = podíl textury, kde modul nesedí na referenci (nad 50 % → modul vyřazen ✕).",
+  reviewCount: (n, all) => `${n} / ${all}`,
+  reviewFilter: "Filtr",
+  reviewAll: "Všechny snímky",
+  reviewSingle: (n) => `Vyřazeny všechny moduly (${n})`,
+  reviewPartial: (n) => `Vyřazena část modulů (${n})`,
+  reviewClean: (n) => `Nic nevyřazeno (${n})`,
+  reviewSource: "Obraz",
+  reviewSourceFused: "Fúze",
+  reviewSourceSingle: "Referenční modul",
+  reviewSize: "Velikost náhledů",
+  reviewModules: (n, all) => `${n}/${all} modulů`,
+  reviewModulesHint: "Moduly použité ve fúzi (včetně reference) / dostupné",
+  reviewNoFusion: "bez fúze",
+  reviewMismatchHint: "Nesoulad struktury po modulech",
+  reviewShowSingle: "Ukázat referenční modul",
+  reviewShowFused: "Ukázat fúzi",
+  reviewOpenEditor: "Otevřít v editoru",
+  reviewEmpty: "Filtru neodpovídá žádný snímek.",
 };
 
 export type Lang = "en" | "cs";
